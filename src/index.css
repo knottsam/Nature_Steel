@@ -1,91 +1,253 @@
-:root {
-  --bg: #0b0b0c;
-  --surface: #121214;
-  --muted: #9ba3af;
-  --text: #f5f7fa;
-  --primary: #FFE14D;
-  --accent: #8ef0ff;
-  --border: #232327;
+/* Admin grid for items */
+.admin-items-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) !important;
+  gap: 1.5rem !important;
+  padding: 0 !important;
+  list-style: none !important;
+  margin: 0 !important;
+  width: 100% !important;
 }
+.admin-items-grid > div {
+  width: auto !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+:root {
+  /* Core palette tuned to your old site (warm walnut + moss + steel) */
+  --bg: #161717;
+  --bg-2: #1b1c1c;
+  --surface: #222322;
+  --surface-2: #262726;
+  --text: #f6f5f2;
+  --text-dim: #d6d3cc;
+  --muted: #bdb6aa;
+  /* Wood / metal */
+  --primary: #c6a375;      /* brass/wood highlight */
+  --primary-2: #d9b98a;    /* lighter wood */
+  --walnut: #8c5a2f;       /* deeper walnut */
+  --accent: #7a8a99;       /* steel blue-grey */
+  --accent-2: #a8b5bf;     /* lighter steel */
+  /* Nature greens inspired by old site imagery */
+  --moss: #6f8c64;
+  --sage: #9caf97;
+
+  --border: #333432;
+  --highlight: #ead8b6;
+  --danger: #c95b57;
+  --success: #75a17a;
+
+  --glow-wood: 0 8px 32px rgba(217, 185, 138, 0.14);
+  --glow-steel: 0 10px 30px rgba(120, 140, 155, 0.14);
+  --ring: 0 0 0 2px color-mix(in oklab, var(--primary) 55%, var(--moss) 45%);
+
+  --r-lg: 20px;
+  --r-md: 12px;
+  --r-sm: 8px;
+  --space: 1rem;
+}
+
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
+
+/* --- BACKGROUND: layered natural/metallic feel (no images) --- */
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
-  background: var(--bg);
+  font-family: 'Inter', 'Segoe UI', 'Roboto', 'Ubuntu', 'Cantarell', 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   color: var(--text);
+  letter-spacing: 0.01em;
+  background-attachment: fixed;
+  /* layered gradients: subtle vignette + brushed steel streaks + woodland tint */
+  background-image:
+    radial-gradient(1200px 800px at 15% -10%, color-mix(in oklab, var(--primary-2) 35%, transparent) 0%, transparent 55%),
+    radial-gradient(1200px 800px at 110% 110%, color-mix(in oklab, var(--accent) 25%, transparent) 0%, transparent 50%),
+    radial-gradient(1000px 700px at 0% 120%, color-mix(in oklab, var(--moss) 18%, transparent) 0%, transparent 45%),
+    linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.25)),
+    repeating-linear-gradient(100deg, rgba(255,255,255,0.02) 0 2px, rgba(0,0,0,0.02) 2px 4px),
+    linear-gradient(160deg, var(--bg) 0%, var(--bg-2) 100%);
+}
+
+
+/* Optional subtle noise (very light) */
+body::before {
+  content: "";
+  position: fixed; inset: 0; pointer-events: none; z-index: -1;
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope="0.02"/></feComponentTransfer></filter><rect width="120" height="120" filter="url(%23n)"/></svg>');
+  opacity: .6;
 }
 
 .app { display: flex; min-height: 100dvh; flex-direction: column; }
-.container { width: min(1100px, 92%); margin: 0 auto; padding: 2rem 0; flex: 1; }
+.container { width: min(1200px, 92%); margin: 0 auto; padding: 2.25rem 0; flex: 1; }
 
-a { color: inherit; text-decoration: none; }
-img { max-width: 100%; display: block; border-radius: 8px; }
+/* --- TYPOGRAPHY --- */
+.h1 { font-size: clamp(1.9rem, 3.2vw, 3rem); line-height: 1.12; margin: .35rem 0 1rem; letter-spacing: -0.01em; }
+.h2 { font-size: clamp(1.35rem, 2.2vw, 2rem); margin: 0 0 .9rem; letter-spacing: -0.005em; }
+.kicker { letter-spacing: .16em; text-transform: uppercase; color: var(--primary-2); font-weight: 700; font-size: .9rem; opacity: 0.9; }
+.muted { color: var(--text-dim); }
+.price { font-weight: 800; }
 
-.grid { display: grid; gap: 1.25rem; }
-.grid-3 { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-.grid-4 { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+p { color: var(--text-dim); line-height: 1.7; margin: .6rem 0 1rem; }
+small { color: var(--muted); }
+
+/* Links */
+a { color: inherit; text-decoration: none; position: relative; }
+a::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--moss) 50%, var(--accent-2) 50%), transparent);
+  opacity: .7; transform: scaleX(.6); transform-origin: left; transition: transform .25s ease, opacity .25s ease;
+}
+
+a:hover::after { transform: scaleX(1); opacity: 1; }
+
+/* Media */
+img { max-width: 100%; display: block; border-radius: var(--r-md); }
+
+/* --- LAYOUT --- */
+.grid { display: grid; gap: 1.2rem; }
+.grid-3 { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.grid-4 { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .row { display: flex; gap: 1rem; align-items: center; }
 .spacer { height: 1.5rem; }
+
+/* --- CARDS (wood grain hue + steel edge) --- */
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1rem;
-  box-shadow: 0 2px 0 rgba(0,0,0,.15);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+  border: 1px solid color-mix(in oklab, var(--border) 80%, black 20%);
+  border-radius: var(--r-lg);
+  padding: 1.4rem 1.2rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.25), var(--glow-steel);
+  transition: box-shadow .2s ease, border-color .2s ease, transform .2s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklab, var(--border) 40%, var(--primary) 60%);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.35), var(--glow-wood);
+}
+.card .card-head {
+  display:flex; align-items:center; justify-content:space-between; margin-bottom: .5rem;
 }
 
+/* Decorative divider reminiscent of timber inlay */
+.divider { border: none; height: 1px; margin: 1.3rem 0; background: linear-gradient(90deg, var(--primary-2), color-mix(in oklab, var(--moss) 50%, transparent)); opacity: .75; }
+
+
+/* --- BUTTONS --- */
 .btn {
-  background: var(--primary);
-  color: #111;
-  border: none;
-  padding: .75rem 1rem;
-  border-radius: 10px;
-  font-weight: 700;
-  cursor: pointer;
+  --bg-btn: var(--primary);
+  --text-btn: #1d1c1a;
+  appearance: none; border: none; cursor: pointer; font-weight: 700;
+  padding: .72rem 1.05rem; border-radius: var(--r-sm); letter-spacing: .02em;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--primary) 88%, white 12%), color-mix(in oklab, var(--walnut) 35%, var(--primary) 65%));
+  color: var(--text-btn);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), 0 1px 0 rgba(0,0,0,0.2), 0 8px 18px rgba(185, 144, 95, 0.18);
+  transition: transform .12s ease, box-shadow .2s ease, filter .2s ease, background .3s ease;
 }
-.btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn:hover { transform: translateY(-1px); filter: saturate(1.05); box-shadow: 0 10px 24px rgba(185, 144, 95, 0.24); }
+.btn:active { transform: translateY(0); box-shadow: 0 4px 12px rgba(185, 144, 95, 0.18); }
+
+/* Ghost / Outline (steel) */
+.btn.ghost {
+  background: linear-gradient(180deg, rgba(127,142,155,0.10), rgba(127,142,155,0.05));
+  color: var(--text);
+  border: 1px solid color-mix(in oklab, var(--accent) 60%, var(--border) 40%);
+  box-shadow: 0 6px 16px rgba(127,142,155,0.16);
+}
+
+.btn.ghost:hover { border-color: var(--accent-2); }
+
+/* Neutral surface button */
+.btn.neutral { background: linear-gradient(180deg, #2a2b2a, #242524); color: var(--text); border: 1px solid var(--border); }
+
+
 .btn.block { width: 100%; }
 
-.hero {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  align-items: center;
-  gap: 2rem;
-  padding: 2rem;
-  background: linear-gradient(180deg, #141418, #0e0e10);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-}
-@media (max-width: 800px) {
-  .hero { grid-template-columns: 1fr; }
-}
-
-.muted { color: var(--muted); }
-.kicker { letter-spacing: .15em; text-transform: uppercase; color: var(--accent); font-weight: 700; font-size: .9rem; }
-.h1 { font-size: clamp(1.7rem, 2.8vw, 2.8rem); line-height: 1.15; margin: .25rem 0 1rem; }
-.h2 { font-size: clamp(1.3rem, 2vw, 1.8rem); margin: 0 0 .75rem; }
-.price { font-weight: 800; }
-.divider { border-top: 1px solid var(--border); margin: 1.25rem 0; }
-.field { display:flex; flex-direction: column; gap: .4rem; margin-bottom: 1rem; }
+/* --- FORMS --- */
+.field { display:flex; flex-direction: column; gap: .45rem; margin-bottom: 1rem; }
+label { font-size: .95rem; color: var(--text-dim); }
 select, input, textarea {
-  background: #18181b;
+  background: #232423;
   color: var(--text);
-  border: 1px solid var(--border);
-  padding: .6rem .7rem;
-  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  padding: .62rem .72rem;
+  border-radius: 9px;
+  font-family: inherit;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color .2s ease, box-shadow .2s ease, background .3s ease;
+}
+select:hover, input:hover, textarea:hover { border-color: color-mix(in oklab, var(--border) 70%, var(--accent) 30%); }
+select:focus-visible, input:focus-visible, textarea:focus-visible {
+  border-color: var(--primary-2);
+  box-shadow: var(--ring);
 }
 
+/* Subtle helper text */
+.form-help { font-size: .85rem; color: var(--muted); }
+
+/* --- HERO (subtle wood/moss/steel blend) --- */
+.hero {
+  display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: 2.4rem;
+  padding: 2.4rem 2rem; border-radius: 22px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in oklab, var(--primary-2) 22%, transparent) 0%, transparent 60%),
+    radial-gradient(120% 120% at 100% 100%, color-mix(in oklab, var(--accent) 20%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 120% at 20% 100%, color-mix(in oklab, var(--moss) 16%, transparent) 0%, transparent 70%),
+    linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.25), var(--glow-wood);
+}
+
+@media (max-width: 900px) { .hero { grid-template-columns: 1fr; padding: 1.5rem; } }
+
+/* --- NAV (fixed, corrected block) --- */
 nav {
   position: sticky; top: 0; z-index: 10;
-  background: rgba(11,11,12,.8); backdrop-filter: blur(10px);
+  background: rgba(18,18,19,.75);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
 }
-nav .inner { width: min(1100px, 92%); margin: 0 auto; display: flex; align-items: center; gap: 1rem; padding: .7rem 0; }
+nav .inner { width: min(1200px, 92%); margin: 0 auto; display: flex; align-items: center; gap: 1rem; padding: .7rem 0; }
 nav a.logo { font-weight: 900; letter-spacing: .04em; }
 nav .spacer-grow { flex: 1; }
-nav a:hover { opacity: .85; }
+nav a:hover { opacity: .9; }
 .nav-links { display: flex; gap: 1rem; }
 .nav-cart { font-weight: 700; }
+
+/* --- UTILITIES / DECORATIONS --- */
+.metal-edge { border: 1px solid color-mix(in oklab, var(--accent) 50%, var(--border) 50%); }
+.badge-wood { display:inline-block; padding:.25rem .6rem; border-radius:999px; background: linear-gradient(180deg, var(--primary-2), var(--primary)); color:#1d1c1a; font-weight:700; font-size:.8rem; }
+.badge-steel { display:inline-block; padding:.25rem .6rem; border-radius:999px; background: linear-gradient(180deg, rgba(127,142,155,.25), rgba(127,142,155,.12)); border:1px solid color-mix(in oklab, var(--accent) 60%, var(--border) 40%); color: var(--text); font-weight:700; font-size:.8rem; }
+.badge-moss { display:inline-block; padding:.25rem .6rem; border-radius:999px; background: linear-gradient(180deg, color-mix(in oklab, var(--moss) 80%, white 20%), color-mix(in oklab, var(--moss) 70%, black 30%)); color:#0f1a10; font-weight:700; font-size:.8rem; }
+
+/* Nature accent utility */
+.accent-moss { color: var(--moss); }
+.bg-moss { background: color-mix(in oklab, var(--moss) 15%, transparent); }
+
+/* Tables */
+
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td { padding: .7rem; border-bottom: 1px solid var(--border); }
+.table th { text-align: left; color: var(--text); font-weight: 700; }
+.table tr:hover td { background: rgba(127,142,155,0.06); }
+
+/* Footer */
 footer { border-top: 1px solid var(--border); padding: 2rem 0; color: var(--muted); }
+
+/* --- OPTIONAL LIGHT THEME (keeps your palette, flips contrast) --- */
+.theme-light {
+  --bg: #f4f1ea;
+  --bg-2: #ebe6dc;
+  --surface: #ffffff;
+  --surface-2: #f6f3ed;
+  --text: #1d1c1a;
+  --text-dim: #36332d;
+  --border: #d8d2c6;
+  --accent: #5f7281;
+  --accent-2: #7f909e;
+  --primary: #b48853;
+  --primary-2: #cdaa78;
+  --walnut: #7a4d2a;
+  --moss: #6f8c64;
+  --sage: #8eac92;
+}
