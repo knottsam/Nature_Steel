@@ -6,7 +6,7 @@ import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvid
 
 const ALLOWED_ADMINS = [
   'knott.mail8@gmail.com',
-  'natureandsteel@gmail.com',
+  'natureandsteelbespoke@gmail.com',
   // 'anotheradmin@email.com',
 ];
 
