@@ -216,119 +216,128 @@ export default function Admin() {
   }
 
   return (
-    <div style={{ maxWidth: 400, margin: '2rem auto' }}>
-      <h2>{editId ? 'Edit' : 'Add New'} Item</h2>
-      <button onClick={handleLogout} style={{ float: 'right', marginBottom: 16 }}>Sign Out</button>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          placeholder="Name"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          required
-          style={{ width: '100%', marginBottom: 8 }}
-        />
-        <textarea
-          placeholder="Description"
-          value={description}
-          onChange={e => setDescription(e.target.value)}
-          required
-          style={{ width: '100%', marginBottom: 8 }}
-        />
-        <input
-          type="text"
-          placeholder="Materials"
-          value={materials}
-          onChange={e => setMaterials(e.target.value)}
-          required
-          style={{ width: '100%', marginBottom: 8 }}
-        />
-        <input
-          type="text"
-          placeholder="Craftsmanship"
-          value={craftsmanship}
-          onChange={e => setCraftsmanship(e.target.value)}
-          required
-          style={{ width: '100%', marginBottom: 8 }}
-        />
-        <input
-          type="number"
-          placeholder="Price (£)"
-          value={price}
-          onChange={e => setPrice(e.target.value)}
-          required
-          style={{ width: '100%', marginBottom: 8 }}
-        />
-        <label style={{ display: 'block', marginBottom: 8 }}>
+    <>
+      <div style={{ maxWidth: 400, margin: '2rem auto' }}>
+        <h2>{editId ? 'Edit' : 'Add New'} Item</h2>
+        <button onClick={handleLogout} style={{ float: 'right', marginBottom: 16 }}>Sign Out</button>
+        <form onSubmit={handleSubmit}>
           <input
-            type="checkbox"
-            checked={customizable}
-            onChange={e => setCustomizable(e.target.checked)}
-            style={{ marginRight: 8 }}
+            type="text"
+            placeholder="Name"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            required
+            style={{ width: '100%', marginBottom: 8 }}
           />
-          Customizable (allow custom art/artist selection)
-        </label>
-        {existingImages.length > 0 && (
-          <div style={{ marginBottom: 8 }}>
-            <strong>Existing images:</strong>
-            <ul style={{ paddingLeft: 16 }}>
-              {existingImages.map((url, i) => (
-                <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <img src={url} alt="existing" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }} />
-                  <button type="button" onClick={() => handleRemoveExistingImage(url)} style={{ color: 'red' }}>Remove</button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={handleImageChange}
-          style={{ marginBottom: 8 }}
-        />
-        {images.length > 0 && (
-          <div style={{ marginBottom: 8 }}>
-            <strong>Selected images:</strong>
-            <ul style={{ paddingLeft: 16 }}>
-              {images.map((img, i) => <li key={i}>{img.name}</li>)}
-            </ul>
-          </div>
-        )}
-        <button type="submit" disabled={uploading} style={{ width: '100%' }}>
-          {uploading ? (editId ? 'Saving...' : 'Uploading...') : (editId ? 'Save Changes' : 'Add Item')}
-        </button>
-        {editId && (
-          <button type="button" onClick={() => {
-            setEditId(null);
-            setName('');
-            setDescription('');
-            setPrice('');
-            setImages([]);
-            setExistingImages([]);
-            setMaterials('');
-            setCraftsmanship('');
-            setCustomizable(true);
-          }} style={{ width: '100%', marginTop: 8 }}>Cancel Edit</button>
-        )}
-      </form>
-      {success && <div style={{ color: 'green', marginTop: 8 }}>Upload successful!</div>}
-      {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
+          <textarea
+            placeholder="Description"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            required
+            style={{ width: '100%', marginBottom: 8 }}
+          />
+          <input
+            type="text"
+            placeholder="Materials"
+            value={materials}
+            onChange={e => setMaterials(e.target.value)}
+            required
+            style={{ width: '100%', marginBottom: 8 }}
+          />
+          <input
+            type="text"
+            placeholder="Craftsmanship"
+            value={craftsmanship}
+            onChange={e => setCraftsmanship(e.target.value)}
+            required
+            style={{ width: '100%', marginBottom: 8 }}
+          />
+          <input
+            type="number"
+            placeholder="Price (£)"
+            value={price}
+            onChange={e => setPrice(e.target.value)}
+            required
+            style={{ width: '100%', marginBottom: 8 }}
+          />
+          <label style={{ display: 'block', marginBottom: 8 }}>
+            <input
+              type="checkbox"
+              checked={customizable}
+              onChange={e => setCustomizable(e.target.checked)}
+              style={{ marginRight: 8 }}
+            />
+            Customizable (allow custom art/artist selection)
+          </label>
+          {existingImages.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <strong>Existing images:</strong>
+              <ul style={{ paddingLeft: 16 }}>
+                {existingImages.map((url, i) => (
+                  <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <img src={url} alt="existing" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }} />
+                    <button type="button" onClick={() => handleRemoveExistingImage(url)} style={{ color: 'red' }}>Remove</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleImageChange}
+            style={{ marginBottom: 8 }}
+          />
+          {images.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <strong>Selected images:</strong>
+              <ul style={{ paddingLeft: 16 }}>
+                {images.map((img, i) => <li key={i}>{img.name}</li>)}
+              </ul>
+            </div>
+          )}
+          <button type="submit" disabled={uploading} style={{ width: '100%' }}>
+            {uploading ? (editId ? 'Saving...' : 'Uploading...') : (editId ? 'Save Changes' : 'Add Item')}
+          </button>
+          {editId && (
+            <button type="button" onClick={() => {
+              setEditId(null);
+              setName('');
+              setDescription('');
+              setPrice('');
+              setImages([]);
+              setExistingImages([]);
+              setMaterials('');
+              setCraftsmanship('');
+              setCustomizable(true);
+            }} style={{ width: '100%', marginTop: 8 }}>Cancel Edit</button>
+          )}
+        </form>
+        {success && <div style={{ color: 'green', marginTop: 8 }}>Upload successful!</div>}
+        {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
+      </div>
       <hr style={{ margin: '2rem 0' }} />
       <h3>Existing Items</h3>
       {loading ? <div>Loading...</div> : (
-        <ul style={{ padding: 0, listStyle: 'none' }}>
+        <div className="admin-items-grid">
           {items.map(item => (
-            <li key={item.id} style={{ marginBottom: 16, border: '1px solid #ccc', padding: 8 }}>
+            <div key={item.id} style={{
+              border: '1px solid #353634',
+              borderRadius: 12,
+              padding: 16,
+              background: 'var(--surface)',
+              boxShadow: '0 2px 8px 0 rgba(40,30,20,0.08)',
+              minHeight: 180,
+            }}>
               <strong>{item.name}</strong><br />
-              {item.images && item.images[0] && <img src={item.images[0]} alt={item.name} style={{ maxWidth: '100%', maxHeight: 100 }} />}<br />
-              <button onClick={() => handleEdit(item)} style={{ marginRight: 8 }}>Edit</button>
-              <button onClick={() => handleDelete(item.id)} style={{ color: 'red', marginTop: 8 }}>Delete</button>
-            </li>
+              {item.images && item.images[0] && <img src={item.images[0]} alt={item.name} style={{ maxWidth: '100%', maxHeight: 100, borderRadius: 8, margin: '8px 0' }} />}<br />
+              <button onClick={() => handleEdit(item)} style={{ marginRight: 8, marginBottom: 6 }}>Edit</button>
+              <button onClick={() => handleDelete(item.id)} style={{ color: 'red', marginTop: 0 }}>Delete</button>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-    </div>
+    </>
   );
 }
