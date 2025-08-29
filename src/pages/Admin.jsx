@@ -21,7 +21,6 @@ export default function Admin() {
   const [error, setError] = useState('');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [dimensions, setDimensions] = useState('');
   const [materials, setMaterials] = useState('');
   const [craftsmanship, setCraftsmanship] = useState('');
   const [customizable, setCustomizable] = useState(true);
@@ -92,7 +91,6 @@ export default function Admin() {
         description,
         price: pricePence,
         images: imageUrls,
-        dimensions,
         materials,
         craftsmanship,
         customizable,
@@ -103,7 +101,6 @@ export default function Admin() {
       setDescription('');
       setPrice('');
       setImages([]);
-      setDimensions('');
       setMaterials('');
       setCraftsmanship('');
       setCustomizable(true);
@@ -187,14 +184,6 @@ export default function Admin() {
           placeholder="Description"
           value={description}
           onChange={e => setDescription(e.target.value)}
-          required
-          style={{ width: '100%', marginBottom: 8 }}
-        />
-        <input
-          type="text"
-          placeholder="Dimensions"
-          value={dimensions}
-          onChange={e => setDimensions(e.target.value)}
           required
           style={{ width: '100%', marginBottom: 8 }}
         />

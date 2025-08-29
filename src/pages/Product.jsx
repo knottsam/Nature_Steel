@@ -145,7 +145,6 @@ export default function Product() {
         <div className="divider" />
         <h3>Details</h3>
         <ul>
-          <li><strong>Dimensions:</strong> {product.dimensions || '—'}</li>
           <li><strong>Materials:</strong> {product.materials || '—'}</li>
           <li><strong>Craftsmanship:</strong> {product.craftsmanship || '—'}</li>
         </ul>
