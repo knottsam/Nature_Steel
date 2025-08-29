@@ -1,10 +1,33 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { products } from '../data/products.js'
 import ProductCard from '../components/ProductCard.jsx'
+import { db } from '../firebase'
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore'
 
 export default function Home() {
-  const featured = products.slice(0, 3)
+  const [recent, setRecent] = useState([])
+  useEffect(() => {
+    async function fetchRecent() {
+      try {
+        // Get up to 4 most recent pieces from Firestore
+        const q = query(collection(db, 'furniture'), orderBy('created', 'desc'), limit(4))
+        const snap = await getDocs(q)
+        setRecent(snap.docs.map(doc => {
+          const d = doc.data()
+          return {
+            ...d,
+            id: doc.id,
+            slug: d.slug || (d.name ? d.name.toLowerCase().replace(/\s+/g, '-') : doc.id),
+            images: d.images && d.images.length ? d.images : (d.imageUrl ? [d.imageUrl] : []),
+            basePricePence: d.price || 0,
+            materials: d.materials || '',
+            craftsmanship: d.craftsmanship || '',
+          }
+        }))
+      } catch {}
+    }
+    fetchRecent()
+  }, [])
   return (
     <div className="grid" style={{gap:'2rem'}}>
       <section className="hero">
@@ -21,9 +44,9 @@ export default function Home() {
       </section>
 
       <section>
-        <h2 className="h2">Featured pieces</h2>
+        <h2 className="h2">Recent pieces</h2>
         <div className="grid grid-3">
-          {featured.map(p => <ProductCard key={p.id} product={p} />)}
+          {recent.map(p => <ProductCard key={p.id} product={p} />)}
         </div>
       </section>
 

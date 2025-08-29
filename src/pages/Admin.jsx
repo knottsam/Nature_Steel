@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { db, storage } from '../firebase';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 
 const ALLOWED_ADMINS = [
@@ -15,10 +15,16 @@ export default function Admin() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
-  const [image, setImage] = useState(null);
+  const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [dimensions, setDimensions] = useState('');
+  const [materials, setMaterials] = useState('');
+  const [craftsmanship, setCraftsmanship] = useState('');
+  const [customizable, setCustomizable] = useState(true);
 
   React.useEffect(() => {
     const auth = getAuth();
@@ -27,6 +33,21 @@ export default function Admin() {
     });
     return () => unsubscribe();
   }, []);
+
+  React.useEffect(() => {
+    // Fetch items from Firestore
+    async function fetchItems() {
+      setLoading(true);
+      try {
+        const querySnapshot = await getDocs(collection(db, 'furniture'));
+        setItems(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        // Optionally handle error
+      }
+      setLoading(false);
+    }
+    fetchItems();
+  }, [success]); // refetch when success changes
 
   const handleGoogleLogin = async () => {
     setAuthError('');
@@ -45,8 +66,8 @@ export default function Admin() {
   };
 
   const handleImageChange = (e) => {
-    if (e.target.files[0]) {
-      setImage(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      setImages(Array.from(e.target.files));
     }
   };
 
@@ -56,28 +77,76 @@ export default function Admin() {
     setError('');
     setSuccess(false);
     try {
-      let imageUrl = '';
-      if (image) {
-        const imageRef = ref(storage, `furniture/${Date.now()}_${image.name}`);
-        await uploadBytes(imageRef, image);
-        imageUrl = await getDownloadURL(imageRef);
+      let imageUrls = [];
+      if (images.length > 0) {
+        for (const img of images) {
+          const imageRef = ref(storage, `furniture/${Date.now()}_${img.name}`);
+          await uploadBytes(imageRef, img);
+          const url = await getDownloadURL(imageRef);
+          imageUrls.push(url);
+        }
       }
+      const pricePence = Math.round(parseFloat(price) * 100);
       await addDoc(collection(db, 'furniture'), {
         name,
         description,
-        price: parseFloat(price),
-        imageUrl,
+        price: pricePence,
+        images: imageUrls,
+        dimensions,
+        materials,
+        craftsmanship,
+        customizable,
         created: Timestamp.now(),
       });
       setSuccess(true);
       setName('');
       setDescription('');
       setPrice('');
-      setImage(null);
+      setImages([]);
+      setDimensions('');
+      setMaterials('');
+      setCraftsmanship('');
+      setCustomizable(true);
     } catch (err) {
       setError('Upload failed: ' + err.message);
     }
     setUploading(false);
+  };
+
+  const handleDelete = async (id) => {
+    const item = items.find(i => i.id === id);
+    if (!window.confirm('Delete this item?')) return;
+    try {
+      // Delete Firestore document
+      await deleteDoc(doc(db, 'furniture', id));
+      // Delete image from Storage if it exists
+      if (item && item.images) {
+        try {
+          for (const imageUrl of item.images) {
+            // Extract the path after the bucket domain
+            const url = new URL(imageUrl);
+            const pathMatch = url.pathname.match(/\/o\/(.+)$/);
+            let storagePath = '';
+            if (pathMatch && pathMatch[1]) {
+              storagePath = decodeURIComponent(pathMatch[1]);
+            } else if (imageUrl.includes('furniture/')) {
+              // fallback: try to extract from known pattern
+              storagePath = imageUrl.split('/furniture/')[1];
+              if (storagePath) storagePath = 'furniture/' + storagePath.split('?')[0];
+            }
+            if (storagePath) {
+              const imageRef = ref(storage, storagePath);
+              await deleteObject(imageRef);
+            }
+          }
+        } catch (err) {
+          // Optionally handle image delete error
+        }
+      }
+      setItems(items => items.filter(item => item.id !== id));
+    } catch (err) {
+      setError('Delete failed: ' + err.message);
+    }
   };
 
   // Restrict access to allowed admins only
@@ -103,7 +172,7 @@ export default function Admin() {
 
   return (
     <div style={{ maxWidth: 400, margin: '2rem auto' }}>
-      <h2>Add New Furniture</h2>
+      <h2>Add New Item</h2>
       <button onClick={handleLogout} style={{ float: 'right', marginBottom: 16 }}>Sign Out</button>
       <form onSubmit={handleSubmit}>
         <input
@@ -122,25 +191,86 @@ export default function Admin() {
           style={{ width: '100%', marginBottom: 8 }}
         />
         <input
+          type="text"
+          placeholder="Dimensions"
+          value={dimensions}
+          onChange={e => setDimensions(e.target.value)}
+          required
+          style={{ width: '100%', marginBottom: 8 }}
+        />
+        <input
+          type="text"
+          placeholder="Materials"
+          value={materials}
+          onChange={e => setMaterials(e.target.value)}
+          required
+          style={{ width: '100%', marginBottom: 8 }}
+        />
+        <input
+          type="text"
+          placeholder="Craftsmanship"
+          value={craftsmanship}
+          onChange={e => setCraftsmanship(e.target.value)}
+          required
+          style={{ width: '100%', marginBottom: 8 }}
+        />
+        <input
           type="number"
-          placeholder="Price"
+          placeholder="Price (£)"
           value={price}
           onChange={e => setPrice(e.target.value)}
           required
           style={{ width: '100%', marginBottom: 8 }}
         />
+        <label style={{ display: 'block', marginBottom: 8 }}>
+          <input
+            type="checkbox"
+            checked={customizable}
+            onChange={e => setCustomizable(e.target.checked)}
+            style={{ marginRight: 8 }}
+          />
+          Customizable (allow custom art/artist selection)
+        </label>
         <input
           type="file"
           accept="image/*"
+          multiple
           onChange={handleImageChange}
           style={{ marginBottom: 8 }}
         />
+        {images.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <strong>Selected images:</strong>
+            <ul style={{ paddingLeft: 16 }}>
+              {images.map((img, i) => <li key={i}>{img.name}</li>)}
+            </ul>
+          </div>
+        )}
         <button type="submit" disabled={uploading} style={{ width: '100%' }}>
-          {uploading ? 'Uploading...' : 'Add Furniture'}
+          {uploading ? 'Uploading...' : 'Add Item'}
         </button>
       </form>
       {success && <div style={{ color: 'green', marginTop: 8 }}>Upload successful!</div>}
       {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
+      <hr style={{ margin: '2rem 0' }} />
+      <h3>Existing Items</h3>
+      {loading ? <div>Loading...</div> : (
+        <ul style={{ padding: 0, listStyle: 'none' }}>
+          {items.map(item => (
+            <li key={item.id} style={{ marginBottom: 16, border: '1px solid #ccc', padding: 8 }}>
+              <strong>{item.name}</strong><br />
+              {item.images && item.images.length > 0 && (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  {item.images.map((imgUrl, i) => (
+                    <img key={i} src={imgUrl} alt={item.name} style={{ maxWidth: 100, maxHeight: 100 }} />
+                  ))}
+                </div>
+              )}
+              <button onClick={() => handleDelete(item.id)} style={{ color: 'red', marginTop: 8 }}>Delete</button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { products } from '../data/products.js'
 import { artists } from '../data/artists.js'
 import { priceForProduct } from '../utils/pricing.js'
+import { db } from '../firebase'
+import { collection, getDocs } from 'firebase/firestore'
 
 const CartContext = createContext(null)
 const STORAGE_KEY = 'cart_v1'
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState([])
+  const [products, setProducts] = useState([])
 
   useEffect(() => {
     try {
@@ -19,6 +21,27 @@ export function CartProvider({ children }) {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
   }, [items])
+
+  useEffect(() => {
+    async function fetchProducts() {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'furniture'))
+        setProducts(querySnapshot.docs.map(doc => {
+          const d = doc.data()
+          return {
+            ...d,
+            id: doc.id,
+            slug: d.slug || (d.name ? d.name.toLowerCase().replace(/\s+/g, '-') : doc.id),
+            images: d.images && d.images.length ? d.images : (d.imageUrl ? [d.imageUrl] : []),
+            basePricePence: d.price || 0,
+            materials: d.materials || '',
+            craftsmanship: d.craftsmanship || '',
+          }
+        }))
+      } catch {}
+    }
+    fetchProducts()
+  }, [])
 
   function addToCart(productId, artistId = null, qty = 1) {
     setItems(prev => {
@@ -45,10 +68,10 @@ export function CartProvider({ children }) {
     return items.map(i => {
       const product = products.find(p => p.id === i.productId)
       const artist = i.artistId ? artists.find(a => a.id === i.artistId) : null
-      const unitPrice = priceForProduct(product, artist)
+      const unitPrice = product ? priceForProduct(product, artist) : 0
       return { ...i, product, artist, unitPrice, lineTotal: unitPrice * i.qty }
     })
-  }, [items])
+  }, [items, products])
 
   const subtotal = enriched.reduce((sum, i) => sum + i.lineTotal, 0)
   const totalQuantity = enriched.reduce((sum, i) => sum + i.qty, 0)

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import ProductCard from '../components/ProductCard.jsx'
-import { products as staticProducts } from '../data/products.js'
 import { db } from '../firebase'
 import { collection, getDocs } from 'firebase/firestore'
 
@@ -15,6 +14,11 @@ export default function Shop() {
         const items = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
+          slug: doc.data().slug || doc.data().name?.toLowerCase().replace(/\s+/g, '-'),
+          images: doc.data().images && doc.data().images.length ? doc.data().images : (doc.data().imageUrl ? [doc.data().imageUrl] : []),
+          basePricePence: doc.data().price || 0,
+          materials: doc.data().materials || '',
+          craftsmanship: doc.data().craftsmanship || '',
         }))
         setDbProducts(items)
       } catch (err) {
@@ -25,21 +29,8 @@ export default function Shop() {
     fetchProducts()
   }, [])
 
-  // Combine static and Firestore products for now
-  const allProducts = [
-    ...staticProducts,
-    ...dbProducts.map(p => ({
-      ...p,
-      // Map Firestore fields to match ProductCard expectations
-      slug: p.slug || p.name?.toLowerCase().replace(/\s+/g, '-'),
-      images: p.imageUrl ? [p.imageUrl] : [],
-      basePricePence: p.price ? Math.round(Number(p.price) * 100) : 0,
-      materials: p.materials || '',
-      craftsmanship: p.craftsmanship || '',
-    }))
-  ]
-
-  // To show only Firestore products later, just use: const allProducts = dbProducts
+  // Only show Firestore products
+  const allProducts = dbProducts
 
   return (
     <div>
