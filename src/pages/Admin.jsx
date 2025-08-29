@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { db, storage } from '../firebase';
-import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 
@@ -24,6 +24,9 @@ export default function Admin() {
   const [materials, setMaterials] = useState('');
   const [craftsmanship, setCraftsmanship] = useState('');
   const [customizable, setCustomizable] = useState(true);
+  const [editId, setEditId] = useState(null);
+  const [existingImages, setExistingImages] = useState([]);
+  const [imagesToDelete, setImagesToDelete] = useState([]);
 
   React.useEffect(() => {
     const auth = getAuth();
@@ -70,13 +73,32 @@ export default function Admin() {
     }
   };
 
+  // When clicking edit, load item data into form
+  const handleEdit = (item) => {
+    setEditId(item.id);
+    setName(item.name || '');
+    setDescription(item.description || '');
+    setPrice(item.price ? (item.price / 100).toString() : '');
+    setMaterials(item.materials || '');
+    setCraftsmanship(item.craftsmanship || '');
+    setCustomizable(item.customizable !== undefined ? item.customizable : true);
+    setExistingImages(item.images || []);
+    setImages([]); // new images to add
+  };
+
+  // Remove an existing image from the list and mark for deletion
+  const handleRemoveExistingImage = (url) => {
+    setExistingImages(imgs => imgs.filter(img => img !== url));
+    setImagesToDelete(list => [...list, url]);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setUploading(true);
     setError('');
     setSuccess(false);
     try {
-      let imageUrls = [];
+      let imageUrls = [...existingImages];
       if (images.length > 0) {
         for (const img of images) {
           const imageRef = ref(storage, `furniture/${Date.now()}_${img.name}`);
@@ -85,8 +107,23 @@ export default function Admin() {
           imageUrls.push(url);
         }
       }
+      // Delete images from Firebase Storage if needed
+      if (imagesToDelete.length > 0) {
+        for (const url of imagesToDelete) {
+          try {
+            // Extract the storage path from the URL
+            const baseUrl = `https://firebasestorage.googleapis.com/v0/b/${import.meta.env.VITE_FIREBASE_STORAGE_BUCKET}/o/`;
+            if (url.startsWith(baseUrl)) {
+              const path = decodeURIComponent(url.substring(baseUrl.length, url.indexOf('?')));
+              await deleteObject(storageRef(storage, path));
+            }
+          } catch (err) {
+            // Ignore errors for missing files
+          }
+        }
+      }
       const pricePence = Math.round(parseFloat(price) * 100);
-      await addDoc(collection(db, 'furniture'), {
+      const data = {
         name,
         description,
         price: pricePence,
@@ -94,13 +131,23 @@ export default function Admin() {
         materials,
         craftsmanship,
         customizable,
-        created: Timestamp.now(),
-      });
+        created: editId ? undefined : Timestamp.now(),
+      };
+      if (editId) {
+        // Remove undefined fields
+        Object.keys(data).forEach(k => data[k] === undefined && delete data[k]);
+        await updateDoc(doc(db, 'furniture', editId), data);
+        setEditId(null);
+      } else {
+        await addDoc(collection(db, 'furniture'), data);
+      }
       setSuccess(true);
       setName('');
       setDescription('');
       setPrice('');
       setImages([]);
+      setExistingImages([]);
+      setImagesToDelete([]);
       setMaterials('');
       setCraftsmanship('');
       setCustomizable(true);
@@ -169,7 +216,7 @@ export default function Admin() {
 
   return (
     <div style={{ maxWidth: 400, margin: '2rem auto' }}>
-      <h2>Add New Item</h2>
+      <h2>{editId ? 'Edit' : 'Add New'} Item</h2>
       <button onClick={handleLogout} style={{ float: 'right', marginBottom: 16 }}>Sign Out</button>
       <form onSubmit={handleSubmit}>
         <input
@@ -220,6 +267,19 @@ export default function Admin() {
           />
           Customizable (allow custom art/artist selection)
         </label>
+        {existingImages.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <strong>Existing images:</strong>
+            <ul style={{ paddingLeft: 16 }}>
+              {existingImages.map((url, i) => (
+                <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <img src={url} alt="existing" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }} />
+                  <button type="button" onClick={() => handleRemoveExistingImage(url)} style={{ color: 'red' }}>Remove</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <input
           type="file"
           accept="image/*"
@@ -236,8 +296,21 @@ export default function Admin() {
           </div>
         )}
         <button type="submit" disabled={uploading} style={{ width: '100%' }}>
-          {uploading ? 'Uploading...' : 'Add Item'}
+          {uploading ? (editId ? 'Saving...' : 'Uploading...') : (editId ? 'Save Changes' : 'Add Item')}
         </button>
+        {editId && (
+          <button type="button" onClick={() => {
+            setEditId(null);
+            setName('');
+            setDescription('');
+            setPrice('');
+            setImages([]);
+            setExistingImages([]);
+            setMaterials('');
+            setCraftsmanship('');
+            setCustomizable(true);
+          }} style={{ width: '100%', marginTop: 8 }}>Cancel Edit</button>
+        )}
       </form>
       {success && <div style={{ color: 'green', marginTop: 8 }}>Upload successful!</div>}
       {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
@@ -248,13 +321,8 @@ export default function Admin() {
           {items.map(item => (
             <li key={item.id} style={{ marginBottom: 16, border: '1px solid #ccc', padding: 8 }}>
               <strong>{item.name}</strong><br />
-              {item.images && item.images.length > 0 && (
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  {item.images.map((imgUrl, i) => (
-                    <img key={i} src={imgUrl} alt={item.name} style={{ maxWidth: 100, maxHeight: 100 }} />
-                  ))}
-                </div>
-              )}
+              {item.images && item.images[0] && <img src={item.images[0]} alt={item.name} style={{ maxWidth: '100%', maxHeight: 100 }} />}<br />
+              <button onClick={() => handleEdit(item)} style={{ marginRight: 8 }}>Edit</button>
               <button onClick={() => handleDelete(item.id)} style={{ color: 'red', marginTop: 8 }}>Delete</button>
             </li>
           ))}
