@@ -5,7 +5,8 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 
 const ALLOWED_ADMINS = [
-  'knott.mail8@gmail.com', // <-- Replace with your allowed admin emails
+  'knott.mail8@gmail.com',
+  'natureandsteel@gmail.com',
   // 'anotheradmin@email.com',
 ];
 
