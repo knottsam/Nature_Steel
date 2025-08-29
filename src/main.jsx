@@ -14,6 +14,7 @@ import About from './pages/About.jsx'
 import Contact from './pages/Contact.jsx'
 import Cart from './pages/Cart.jsx'
 import Checkout from './pages/Checkout.jsx'
+import Admin from './pages/Admin.jsx'
 
 const router = createBrowserRouter([
   {
@@ -29,8 +30,8 @@ const router = createBrowserRouter([
       { path: 'about', element: <About /> },
       { path: 'contact', element: <Contact /> },
       { path: 'cart', element: <Cart /> },
-  { path: 'checkout', element: <Checkout /> },
-  { path: 'admin', element: React.createElement(require('./pages/Admin.jsx').default) },
+      { path: 'checkout', element: <Checkout /> },
+      { path: 'admin', element: <Admin /> },
     ],
   },
 ])
