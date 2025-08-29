@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import Skeg from '../../Skeg.jpg'
 import { Link } from 'react-router-dom'
 import ProductCard from '../components/ProductCard.jsx'
 import { db } from '../firebase'
@@ -29,8 +30,26 @@ export default function Home() {
     fetchRecent()
   }, [])
   return (
-    <div className="grid" style={{gap:'2rem'}}>
-      <section className="hero">
+    <div style={{ position: 'relative', minHeight: '100vh' }}>
+      {/* Skeg.jpg background on right side */}
+      <img
+        src={Skeg}
+        alt="Skeg background"
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          height: '100vh',
+          width: 'auto',
+          maxWidth: 'min(40vw, 500px)',
+          zIndex: 0,
+          opacity: 0.22, // adjust as needed
+          pointerEvents: 'none',
+          objectFit: 'cover',
+        }}
+      />
+      <div className="grid" style={{gap:'2rem', position: 'relative', zIndex: 1}}>
+        <section className="hero">
         <div>
           <div className="kicker">New drop</div>
           <h1 className="h1">Nature & Steel Bespoke: Handcrafted Furniture × Original Art</h1>
@@ -60,6 +79,7 @@ export default function Home() {
         </ol>
         <p className="muted">Custom orders add extra lead time. See <Link to="/faq">FAQ</Link> for details.</p>
       </section>
+    </div>
     </div>
   )
 }
