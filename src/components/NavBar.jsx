@@ -14,6 +14,7 @@ export default function NavBar() {
           <NavLink to="/faq">FAQ</NavLink>
           <NavLink to="/about">About</NavLink>
           <NavLink to="/contact">Contact</NavLink>
+          <NavLink to="/admin">Admin</NavLink>
         </div>
         <div className="spacer-grow" />
         <NavLink to="/cart" className="nav-cart">Cart ({totalQuantity})</NavLink>

@@ -29,7 +29,8 @@ const router = createBrowserRouter([
       { path: 'about', element: <About /> },
       { path: 'contact', element: <Contact /> },
       { path: 'cart', element: <Cart /> },
-      { path: 'checkout', element: <Checkout /> },
+  { path: 'checkout', element: <Checkout /> },
+  { path: 'admin', element: React.createElement(require('./pages/Admin.jsx').default) },
     ],
   },
 ])
