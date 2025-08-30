@@ -43,7 +43,7 @@ export default function Home() {
           width: 'auto',
           maxWidth: 'min(40vw, 500px)',
           zIndex: 0,
-          opacity: 0.22, // adjust as needed
+          opacity: 0.125, // adjust as needed
           pointerEvents: 'none',
           objectFit: 'cover',
         }}
