@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { artists } from '../data/artists.js'
+import { products as demoProducts } from '../data/products.js'
 import { priceForProduct } from '../utils/pricing.js'
 import { db } from '../firebase'
 import { collection, getDocs } from 'firebase/firestore'
@@ -9,7 +10,10 @@ const STORAGE_KEY = 'cart_v1'
 
 export function CartProvider({ children }) {
   const [items, setItems] = useState([])
-  const [products, setProducts] = useState([])
+  const demoEnabled = import.meta.env.VITE_ENABLE_DEMO_PRODUCTS === '1'
+  // Pre-seed products with demo data to avoid a blank period while Firestore loads
+  const [products, setProducts] = useState(demoEnabled ? [...demoProducts] : [])
+  const [cleanupTick, setCleanupTick] = useState(0)
 
   useEffect(() => {
     try {
@@ -26,7 +30,7 @@ export function CartProvider({ children }) {
     async function fetchProducts() {
       try {
         const querySnapshot = await getDocs(collection(db, 'furniture'))
-        setProducts(querySnapshot.docs.map(doc => {
+        const fromDb = querySnapshot.docs.map(doc => {
           const d = doc.data()
           return {
             ...d,
@@ -37,11 +41,32 @@ export function CartProvider({ children }) {
             materials: d.materials || '',
             craftsmanship: d.craftsmanship || '',
           }
-        }))
-      } catch {}
+        })
+        if (fromDb.length > 0) {
+          setProducts(fromDb)
+        } else if (!demoEnabled) {
+          setProducts([])
+        }
+      } catch {
+        if (!demoEnabled) setProducts([])
+      }
     }
     fetchProducts()
   }, [])
+
+  // Auto-clean cart entries that no longer have a matching product
+  useEffect(() => {
+    if (!products || products.length === 0) return
+    setItems(prev => {
+      const productIds = new Set(products.map(p => p.id))
+      const cleaned = prev.filter(i => productIds.has(i.productId))
+      if (cleaned.length !== prev.length) {
+        // Trigger a small UI notice that items were removed
+        setCleanupTick(t => t + 1)
+      }
+      return cleaned.length === prev.length ? prev : cleaned
+    })
+  }, [products])
 
   function addToCart(productId, artistId = null, qty = 1) {
     setItems(prev => {
@@ -77,7 +102,7 @@ export function CartProvider({ children }) {
   const totalQuantity = enriched.reduce((sum, i) => sum + i.qty, 0)
 
   return (
-    <CartContext.Provider value={{ items: enriched, addToCart, removeFromCart, updateQty, subtotal, totalQuantity }}>
+    <CartContext.Provider value={{ items: enriched, addToCart, removeFromCart, updateQty, subtotal, totalQuantity, cleanupTick }}>
       {children}
     </CartContext.Provider>
   )
