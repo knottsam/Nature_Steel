@@ -42,16 +42,25 @@ export default function Admin() {
     // Fetch items from Firestore
     async function fetchItems() {
       setLoading(true);
+      setError(''); // Clear previous errors
       try {
+        console.log('[Admin] Fetching furniture collection...');
+        console.log('[Admin] Current user:', user?.email, user?.uid, 'verified:', user?.emailVerified);
         const querySnapshot = await getDocs(collection(db, 'furniture'));
-        setItems(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const docs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        console.log('[Admin] Fetched', docs.length, 'items');
+        setItems(docs);
       } catch (err) {
-        // Optionally handle error
+        // Surface permission/config errors to the UI to help diagnose
+        console.error('[Admin] Fetch error:', err);
+        setError('Load failed: ' + (err?.code || '') + ' - ' + (err?.message || 'Unknown error'));
       }
       setLoading(false);
     }
-    fetchItems();
-  }, [success]); // refetch when success changes
+    if (user) {
+      fetchItems();
+    }
+  }, [success, user]); // refetch when success changes or user signs in
 
   const handleGoogleLogin = async () => {
     setAuthError('');
@@ -103,11 +112,18 @@ export default function Admin() {
     try {
       let imageUrls = [...existingImages];
       if (images.length > 0) {
+        console.log('[Admin] Uploading', images.length, 'image(s) to Storage...');
         for (const img of images) {
           const imageRef = ref(storage, `furniture/${Date.now()}_${img.name}`);
-          await uploadBytes(imageRef, img);
-          const url = await getDownloadURL(imageRef);
-          imageUrls.push(url);
+          try {
+            await uploadBytes(imageRef, img);
+            const url = await getDownloadURL(imageRef);
+            imageUrls.push(url);
+            console.log('[Admin] Uploaded:', url);
+          } catch (uploadErr) {
+            console.error('[Admin] Image upload failed:', uploadErr);
+            throw new Error(`Image upload failed: ${uploadErr.message}`);
+          }
         }
       }
       // Delete images from Firebase Storage if needed
@@ -118,7 +134,8 @@ export default function Admin() {
             const baseUrl = `https://firebasestorage.googleapis.com/v0/b/${import.meta.env.VITE_FIREBASE_STORAGE_BUCKET}/o/`;
             if (url.startsWith(baseUrl)) {
               const path = decodeURIComponent(url.substring(baseUrl.length, url.indexOf('?')));
-              await deleteObject(storageRef(storage, path));
+              const imageRef = ref(storage, path);
+              await deleteObject(imageRef);
             }
           } catch (err) {
             // Ignore errors for missing files
@@ -140,10 +157,14 @@ export default function Admin() {
       if (editId) {
         // Remove undefined fields
         Object.keys(data).forEach(k => data[k] === undefined && delete data[k]);
+        console.log('[Admin] Updating doc:', editId);
         await updateDoc(doc(db, 'furniture', editId), data);
+        console.log('[Admin] Update succeeded');
         setEditId(null);
       } else {
-        await addDoc(collection(db, 'furniture'), data);
+        console.log('[Admin] Creating new doc with data:', data);
+        const docRef = await addDoc(collection(db, 'furniture'), data);
+        console.log('[Admin] Doc created with ID:', docRef.id);
       }
       setSuccess(true);
       setName('');
@@ -157,7 +178,10 @@ export default function Admin() {
       setCustomizable(true);
       setPublished(false);
     } catch (err) {
-      setError('Upload failed: ' + err.message);
+      console.error('[Admin] handleSubmit error:', err);
+      const msg = err?.message || 'Unknown error';
+      const code = err?.code || '';
+      setError(`Upload failed: ${code ? code + ': ' : ''}${msg}`);
     }
     setUploading(false);
   };
@@ -224,6 +248,22 @@ export default function Admin() {
       <div style={{ maxWidth: 400, margin: '2rem auto' }}>
         <h2>{editId ? 'Edit' : 'Add New'} Item</h2>
         <button onClick={handleLogout} style={{ float: 'right', marginBottom: 16 }}>Sign Out</button>
+        <div style={{
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: '8px 12px',
+          marginBottom: 12,
+          background: 'var(--surface)'
+        }}>
+          <div style={{fontSize: 13, color: 'var(--muted)'}}>Signed in as</div>
+          <div style={{fontWeight: 600}}>{user?.email || '—'}</div>
+          <div style={{fontSize: 13}}>UID: <code>{user?.uid || '—'}</code></div>
+          <div style={{fontSize: 13}}>Email verified: {String(!!user?.emailVerified)}</div>
+          <button type="button" onClick={() => { navigator.clipboard?.writeText(user?.uid || ''); }} style={{marginTop: 6}}>Copy UID</button>
+          <div style={{fontSize: 12, color:'#b45309', marginTop: 6}}>
+            If you can't see items or save changes, add this UID to Firestore/Storage rules or use an admins collection.
+          </div>
+        </div>
         <form onSubmit={handleSubmit}>
           <input
             type="text"
