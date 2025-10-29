@@ -6,8 +6,6 @@ import { priceForProduct } from '../utils/pricing.js'
 import { formatPrice } from '../utils/currency.js'
 import { SITE_SETTINGS } from '../data/siteSettings.js'
 import { useCart } from '../context/CartContext.jsx'
-import { db } from '../firebase'
-import { collection, getDocs } from 'firebase/firestore'
 
 function ImageCarousel({ images }) {
   const [index, setIndex] = useState(0)
@@ -117,31 +115,29 @@ export default function Product() {
   const selectedArtist = useMemo(() => {
     return artistId === 'none' ? null : artists.find(a => a.id === artistId)
   }, [artistId])
-  const { addToCart } = useCart()
+  const { addToCart, products: liveProducts } = useCart()
   const [showAdded, setShowAdded] = useState(false)
+  const [toast, setToast] = useState('')
 
   useEffect(() => {
-    async function fetchProduct() {
-      // Try static products first
-      let found = products.find(p => p.slug === slug)
-      if (found) {
-        setProduct(found)
-        setLoading(false)
-        return
-      }
-      // Try Firestore
-      const querySnapshot = await getDocs(collection(db, 'furniture'))
-      let dbProduct = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-        .find(p => (p.slug || (p.name && p.name.toLowerCase().replace(/\s+/g, '-'))) === slug)
-      // Fix: map price to basePricePence for Firestore products
-      if (dbProduct && dbProduct.price && !dbProduct.basePricePence) {
-        dbProduct.basePricePence = dbProduct.price;
-      }
-      setProduct(dbProduct || null)
+    // Prefer live products (real-time) from context; fallback to static
+    const foundLive = (liveProducts || []).find(p => (p.slug || (p.name && p.name.toLowerCase().replace(/\s+/g, '-'))) === slug)
+    if (foundLive) {
+      const p = { ...foundLive }
+      if (p.price && !p.basePricePence) p.basePricePence = p.price
+      setProduct(p)
       setLoading(false)
+      return
     }
-    fetchProduct()
-  }, [slug])
+    const foundStatic = products.find(p => p.slug === slug)
+    if (foundStatic) {
+      setProduct(foundStatic)
+      setLoading(false)
+      return
+    }
+    // If neither found yet, stay loading until liveProducts updates
+    setLoading((prev) => prev && true)
+  }, [slug, liveProducts])
 
   if (loading) return <p>Loading...</p>
   if (!product) return <p>Not found</p>
@@ -149,6 +145,9 @@ export default function Product() {
   // Fallbacks for Firestore products
   const images = product.images && product.images.length ? product.images : (product.imageUrl ? [product.imageUrl] : [])
   const price = priceForProduct(product, selectedArtist)
+  const numericStock = typeof product.stock === 'number' ? product.stock : null
+  const available = numericStock != null ? numericStock : 1
+  const soldOut = numericStock != null ? numericStock <= 0 : false
 
   // Only show customization dropdown if customizable (default true for static products)
   const isCustomizable = product.customizable !== undefined ? product.customizable : true;
@@ -188,13 +187,22 @@ export default function Product() {
 
         <button
           className="btn"
+          disabled={soldOut}
           onClick={() => {
-            addToCart(product.id, selectedArtist?.id, 1)
-            setShowAdded(true)
-            setTimeout(() => setShowAdded(false), 1800)
+            const res = addToCart(product.id, selectedArtist?.id, 1)
+            if (res && res.ok) {
+              setToast('Added to cart')
+              setShowAdded(true)
+              setTimeout(() => { setShowAdded(false); setToast('') }, 1800)
+            } else {
+              const msg = res?.reason === 'soldout' ? 'Sold out' : res?.reason === 'limit' ? `Only ${available} available` : 'Unavailable'
+              setToast(msg)
+              setShowAdded(true)
+              setTimeout(() => { setShowAdded(false); setToast('') }, 1800)
+            }
           }}
         >
-          Add to cart
+          {soldOut ? 'Sold out' : 'Add to cart'}
         </button>
 
         {showAdded && (
@@ -213,7 +221,7 @@ export default function Product() {
             zIndex: 1000,
             transition: 'opacity .3s',
           }}>
-            Added to cart!
+            {toast || 'Added to cart!'}
           </div>
         )}
 
@@ -228,6 +236,9 @@ export default function Product() {
         <p className="muted">
           Lead time: ~{SITE_SETTINGS.leadTimeBaselineDays} days base, +{SITE_SETTINGS.leadTimeCustomExtraDays} days if customized.
         </p>
+        {numericStock != null && (
+          <p className="muted">{soldOut ? 'Currently sold out.' : `${numericStock} in stock`}</p>
+        )}
       </div>
     </div>
   )
