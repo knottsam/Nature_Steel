@@ -25,6 +25,7 @@ export default function Admin() {
   const [materials, setMaterials] = useState('');
   const [craftsmanship, setCraftsmanship] = useState('');
   const [customizable, setCustomizable] = useState(true);
+  const [published, setPublished] = useState(false);
   const [editId, setEditId] = useState(null);
   const [existingImages, setExistingImages] = useState([]);
   const [imagesToDelete, setImagesToDelete] = useState([]);
@@ -83,6 +84,7 @@ export default function Admin() {
     setMaterials(item.materials || '');
     setCraftsmanship(item.craftsmanship || '');
     setCustomizable(item.customizable !== undefined ? item.customizable : true);
+    setPublished(!!item.published);
     setExistingImages(item.images || []);
     setImages([]); // new images to add
   };
@@ -132,6 +134,7 @@ export default function Admin() {
         materials,
         craftsmanship,
         customizable,
+        published,
         created: editId ? undefined : Timestamp.now(),
       };
       if (editId) {
@@ -152,6 +155,7 @@ export default function Admin() {
       setMaterials('');
       setCraftsmanship('');
       setCustomizable(true);
+      setPublished(false);
     } catch (err) {
       setError('Upload failed: ' + err.message);
     }
@@ -268,6 +272,15 @@ export default function Admin() {
               style={{ marginRight: 8 }}
             />
             Customizable (allow custom art/artist selection)
+          </label>
+          <label style={{ display: 'block', marginBottom: 8 }}>
+            <input
+              type="checkbox"
+              checked={published}
+              onChange={e => setPublished(e.target.checked)}
+              style={{ marginRight: 8 }}
+            />
+            Published (visible in the shop)
           </label>
           {existingImages.length > 0 && (
             <div style={{ marginBottom: 8 }}>

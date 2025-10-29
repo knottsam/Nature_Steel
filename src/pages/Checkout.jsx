@@ -59,6 +59,7 @@ export default function Checkout() {
 function CheckoutForm({ items, subtotal, onPlaced }) {
   const stripe = useStripe()
   const elements = useElements()
+  const { clearCart } = useCart()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [address, setAddress] = useState('')
@@ -79,10 +80,11 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
 
     setLoading(true)
     try {
-      const createPaymentIntent = httpsCallable(functions, 'createPaymentIntent')
-      const mode = stripePublishableKey?.startsWith('pk_live_') ? 'live' : 'test'
-      const itemsSummary = items.map(i => `${i.product?.name || 'Item'}×${i.qty}`).join(', ').slice(0, 450)
-      const res = await createPaymentIntent({ amount: subtotal, currency: 'gbp', mode, itemsSummary, userEmail: email, userName: name })
+  const createPaymentIntent = httpsCallable(functions, 'createPaymentIntent')
+  const mode = stripePublishableKey?.startsWith('pk_live_') ? 'live' : 'test'
+  const itemsSummary = items.map(i => `${i.product?.name || 'Item'}×${i.qty}`).join(', ').slice(0, 450)
+  const itemsJson = JSON.stringify(items.map(i => ({ productId: i.product?.id || i.productId, qty: i.qty }))).slice(0, 450)
+  const res = await createPaymentIntent({ amount: subtotal, currency: 'gbp', mode, itemsSummary, itemsJson, userEmail: email, userName: name })
       const clientSecret = res?.data?.clientSecret
       if (!clientSecret) throw new Error('No client secret returned from server')
 
@@ -115,7 +117,11 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
       })
 
       if (confirmErr) throw new Error(confirmErr.message || 'Payment failed')
-      if (paymentIntent?.status === 'succeeded') onPlaced()
+      if (paymentIntent?.status === 'succeeded') {
+        // Clear the cart now that payment succeeded
+        try { clearCart() } catch {}
+        onPlaced()
+      }
       else throw new Error(`Payment status: ${paymentIntent?.status}`)
     } catch (err) {
       // Surface rich error info from the callable/Stripe to help diagnose

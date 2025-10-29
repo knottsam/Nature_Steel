@@ -15,6 +15,30 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
+const requiredKeys = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID',
+];
+const missing = requiredKeys.filter(k => !import.meta.env[k]);
+export const configHealth = {
+  ok: missing.length === 0,
+  missing,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+};
+if (!configHealth.ok) {
+  // eslint-disable-next-line no-console
+  console.error('[firebase] Missing Firebase env variables in .env.local:', missing.join(', '));
+  // Helpful hint for projectId undefined -> Firestore Listen 400
+  if (!import.meta.env.VITE_FIREBASE_PROJECT_ID) {
+    // eslint-disable-next-line no-console
+    console.error('[firebase] VITE_FIREBASE_PROJECT_ID is undefined. Firestore real-time listeners will fail with projects/undefined.');
+  }
+}
+
 export const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const storage = getStorage(app);

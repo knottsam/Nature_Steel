@@ -61,7 +61,14 @@ export default function Cart() {
                   </div>
                 </div>
                 <div className="row">
-                  <input type="number" min="1" value={item.qty} onChange={e => updateQty(item.key, parseInt(e.target.value || '1'))} style={{width:64}} />
+                  <input
+                    type="number"
+                    min="1"
+                    max={typeof item.product?.stock === 'number' ? Math.max(1, item.product.stock) : 1}
+                    value={item.qty}
+                    onChange={e => updateQty(item.key, parseInt(e.target.value || '1'))}
+                    style={{width:64}}
+                  />
                   <div style={{width:110, textAlign:'right', fontWeight:800}}>{formatPrice(item.lineTotal)}</div>
                   <button className="btn ghost" onClick={() => removeFromCart(item.key)}>Remove</button>
                 </div>

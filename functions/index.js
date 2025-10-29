@@ -4,7 +4,8 @@ const stripeLib = require("stripe");
 const fs = require("fs");
 const path = require("path");
 const dotenv = require("dotenv");
-const admin = require("firebase-admin");
+const {initializeApp, getApps} = require("firebase-admin/app");
+const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 let adminInitialized = false;
 
 // Load local env for emulator: prefer .env.local then .env
@@ -34,11 +35,11 @@ exports.createPaymentIntent = onCall({secrets: [stripeSecret]}, async (request) 
     }
     const stripe = stripeLib(secret);
 
-  const {amount, currency = "gbp", mode, itemsSummary, userEmail, userName} = request.data || {};
+    const {amount, currency = "gbp", mode, itemsSummary, itemsJson, userEmail, userName} = request.data || {};
 
     // Optional: prevent common key mismatches (client test vs server live)
-  const isServerLive = /^sk_live_/.test(secret);
-  const isServerTest = /^sk_test_/.test(secret);
+    const isServerLive = /^sk_live_/.test(secret);
+    const isServerTest = /^sk_test_/.test(secret);
     if (mode === "test" && isServerLive) {
       throw new HttpsError(
           "failed-precondition",
@@ -63,6 +64,87 @@ exports.createPaymentIntent = onCall({secrets: [stripeSecret]}, async (request) 
       );
     }
 
+    // Parse and validate items for stock availability BEFORE creating the PaymentIntent
+    let cartItems = [];
+    try {
+      cartItems = itemsJson ? JSON.parse(itemsJson) : [];
+    } catch (e) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Invalid itemsJson",
+          {details: "itemsJson must be a JSON-encoded array of { productId, qty }."},
+      );
+    }
+    if (!Array.isArray(cartItems) || cartItems.length === 0) {
+      throw new HttpsError(
+          "invalid-argument",
+          "No items to purchase",
+          {details: "Your cart appears to be empty."},
+      );
+    }
+    // Ensure each item has proper shape
+    for (const line of cartItems) {
+      const qty = Number(line && line.qty);
+      const pid = line && (line.productId != null ? String(line.productId) : null);
+      if (!pid || !Number.isInteger(qty) || qty <= 0) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Invalid cart item",
+            {details: `Each item must have productId and positive integer qty.`},
+        );
+      }
+    }
+
+  // Check stock in Firestore. If a product document exists and has a numeric 'stock' field,
+  // require stock >= requested qty. If the product doc is missing, treat as unavailable.
+  // If the product has no numeric 'stock', treat it as a one-of-a-kind item with stock=1
+  // and require qty <= 1.
+    initAdmin();
+    const db = getFirestore();
+    const errors = [];
+
+    // Fetch all product docs in parallel
+    await Promise.all(cartItems.map(async (line) => {
+      const productId = String(line.productId);
+      const qty = Number(line.qty);
+      try {
+        const ref = db.collection("furniture").doc(productId);
+        const snap = await ref.get();
+        if (!snap.exists) {
+          errors.push({productId, reason: "not-found"});
+          return;
+        }
+        const data = snap.data() || {};
+        const name = data.name || null;
+        if (typeof data.stock === "number") {
+          if (data.stock < qty) {
+            errors.push({productId, name, reason: "insufficient", available: data.stock, requested: qty});
+          }
+        } else {
+          // Untracked stock => assume stock=1; require qty <= 1
+          if (qty > 1) {
+            errors.push({productId, name, reason: "insufficient", available: 1, requested: qty});
+          }
+        }
+      } catch (e) {
+        errors.push({productId, reason: "check-failed", message: e && e.message});
+      }
+    }));
+
+    if (errors.length > 0) {
+      // Build a readable error message
+      const msg = errors.map((e) => {
+        if (e.reason === "not-found") return `Product ${e.productId} is unavailable.`;
+        if (e.reason === "insufficient") return `${e.name || e.productId} only has ${e.available} in stock (you requested ${e.requested}).`;
+        return `Could not verify stock for ${e.productId}.`;
+      }).join(" ");
+      throw new HttpsError(
+          "failed-precondition",
+          "Out of stock",
+          {details: msg, items: errors},
+      );
+    }
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
@@ -71,6 +153,7 @@ exports.createPaymentIntent = onCall({secrets: [stripeSecret]}, async (request) 
       receipt_email: userEmail || undefined,
       metadata: {
         items: itemsSummary || "",
+        itemsJson: (itemsJson && String(itemsJson).slice(0, 450)) || "",
         userEmail: userEmail || "",
         userName: userName || "",
       },
@@ -99,15 +182,15 @@ exports.createPaymentIntent = onCall({secrets: [stripeSecret]}, async (request) 
 function initAdmin() {
   if (adminInitialized) return;
   try {
-    if (!admin.apps || admin.apps.length === 0) {
-      admin.initializeApp();
+    if (!getApps().length) {
+      initializeApp();
     }
     adminInitialized = true;
     // eslint-disable-next-line no-console
-    console.log("[stripeWebhook] Firebase Admin initialized");
+    console.log("[functions] Firebase Admin initialized");
   } catch (e) {
     // eslint-disable-next-line no-console
-    console.error("[stripeWebhook] Failed to initialize Firebase Admin:", e);
+    console.error("[functions] Failed to initialize Firebase Admin:", e);
   }
 }
 
@@ -136,15 +219,16 @@ exports.stripeWebhook = onRequest({secrets: [webhookSecret, stripeSecret]}, asyn
     const event = stripeLib(secret || "").webhooks.constructEvent(raw, sig, whSecret);
 
     if (event.type === "payment_intent.succeeded") {
-      initAdmin();
-      const pi = event.data.object;
-      const db = admin.firestore();
+  initAdmin();
+  const pi = event.data.object;
+  const db = getFirestore();
       const charge = (pi.charges && pi.charges.data && pi.charges.data[0]) || {};
       const billing = charge.billing_details || {};
       const shipping = pi.shipping || {};
       const email = billing.email || (pi.metadata && pi.metadata.userEmail) || null;
       const name = shipping.name || billing.name || (pi.metadata && pi.metadata.userName) || null;
       const items = (pi.metadata && pi.metadata.items) || "";
+      const itemsJson = (pi.metadata && pi.metadata.itemsJson) || "";
       const addr = shipping.address || billing.address || {};
 
       const order = {
@@ -152,8 +236,15 @@ exports.stripeWebhook = onRequest({secrets: [webhookSecret, stripeSecret]}, asyn
         amount: pi.amount,
         currency: pi.currency,
         status: pi.status,
-        created: admin.firestore.Timestamp.fromMillis((pi.created || Math.floor(Date.now()/1000)) * 1000),
+  created: Timestamp.fromMillis((pi.created || Math.floor(Date.now()/1000)) * 1000),
         itemsSummary: items,
+        items: (() => {
+          try {
+            return itemsJson ? JSON.parse(itemsJson) : [];
+          } catch (e) {
+            return [];
+          }
+        })(),
         customer: {
           name: name || null,
           email: email || null,
@@ -174,6 +265,34 @@ exports.stripeWebhook = onRequest({secrets: [webhookSecret, stripeSecret]}, asyn
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error("[stripeWebhook] Failed to save order:", pi.id, e);
+      }
+
+      // Decrement stock levels for each item. If the product has a numeric 'stock' field, decrement.
+      // If the product has no numeric 'stock', treat as a one-of-a-kind and delete the document.
+      const parsedItems = order.items || [];
+      for (const line of parsedItems) {
+        try {
+          if (!line || !line.productId || !line.qty) continue;
+          const ref = db.collection("furniture").doc(String(line.productId));
+          await db.runTransaction(async (tx) => {
+            const snap = await tx.get(ref);
+            if (!snap.exists) return; // no product, skip
+            const data = snap.data() || {};
+            if (typeof data.stock === "number") {
+              const current = data.stock;
+              const next = Math.max(0, current - Number(line.qty || 0));
+              tx.update(ref, {stock: next});
+            } else {
+              // One-of-a-kind (no numeric stock): remove the product from the catalog
+              tx.delete(ref);
+            }
+          });
+          // eslint-disable-next-line no-console
+          console.log("[stripeWebhook] Inventory updated for", line.productId, "qty", line.qty);
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error("[stripeWebhook] Failed to decrement stock for", line && line.productId, e);
+        }
       }
     }
 

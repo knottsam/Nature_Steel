@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import ProductCard from '../components/ProductCard.jsx'
-import { db } from '../firebase'
-import { collection, getDocs } from 'firebase/firestore'
+import { db, configHealth } from '../firebase'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { products as demoProducts } from '../data/products.js'
 
 export default function Shop() {
@@ -10,25 +10,48 @@ export default function Shop() {
   const [loading, setLoading] = useState(demoEnabled ? false : true)
 
   useEffect(() => {
-    async function fetchProducts() {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'furniture'))
-        const items = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          slug: doc.data().slug || doc.data().name?.toLowerCase().replace(/\s+/g, '-'),
-          images: doc.data().images && doc.data().images.length ? doc.data().images : (doc.data().imageUrl ? [doc.data().imageUrl] : []),
-          basePricePence: doc.data().price || 0,
-          materials: doc.data().materials || '',
-          craftsmanship: doc.data().craftsmanship || '',
-        }))
-        if (items.length > 0) setDbProducts(items)
-      } catch (err) {
-        // Optionally handle error
-      }
+    if (!configHealth.ok) {
+      // eslint-disable-next-line no-console
+      console.warn('[Shop] Skipping Firestore subscription due to missing config:', configHealth.missing)
+      setLoading(false)
+      return
+    }
+    let unsub = null
+    try {
+      // Match security rules: only read published items
+      const q = query(collection(db, 'furniture'), where('published', '==', true))
+      unsub = onSnapshot(
+        q,
+        (querySnapshot) => {
+          try {
+            const items = querySnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data(),
+              slug: doc.data().slug || doc.data().name?.toLowerCase().replace(/\s+/g, '-'),
+              images: doc.data().images && doc.data().images.length ? doc.data().images : (doc.data().imageUrl ? [doc.data().imageUrl] : []),
+              basePricePence: doc.data().price || 0,
+              materials: doc.data().materials || '',
+              craftsmanship: doc.data().craftsmanship || '',
+            }))
+            setDbProducts(items)
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn('[Shop] Failed to parse snapshot:', err)
+          }
+          setLoading(false)
+        },
+        (err) => {
+          // eslint-disable-next-line no-console
+          console.warn('[Shop] Firestore subscription error:', err)
+          setLoading(false)
+        }
+      )
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[Shop] Failed to subscribe to furniture collection:', e)
       setLoading(false)
     }
-    fetchProducts()
+    return () => { try { unsub && unsub() } catch {} }
   }, [])
 
   // Prefer Firestore; fallback to demo products when enabled
