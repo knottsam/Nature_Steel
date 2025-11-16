@@ -7,7 +7,7 @@ import './index.css'
 
 export default function App() {
   // Set to true to show under construction overlay
-  const UNDER_CONSTRUCTION = false;
+  const UNDER_CONSTRUCTION = true;
 
   return (
     <CartProvider>
