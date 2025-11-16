@@ -18,6 +18,7 @@
     "firebase-admin": "^12.6.0",
     "firebase-functions": "^6.0.1",
     "graff-furniture-vite": "file:..",
+    "square": "^43.2.0",
     "stripe": "^18.5.0"
   },
   "devDependencies": {

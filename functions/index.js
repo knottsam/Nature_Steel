@@ -1,6 +1,8 @@
+// Square Payment Processing Functions
 const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {defineSecret} = require("firebase-functions/params");
-const stripeLib = require("stripe");
+// Using direct HTTPS calls to Square to avoid SDK auth inconsistencies
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const dotenv = require("dotenv");
@@ -13,45 +15,51 @@ try {
   const envLocal = path.join(__dirname, ".env.local");
   const envDefault = path.join(__dirname, ".env");
   if (fs.existsSync(envLocal)) {
-    dotenv.config({path: envLocal});
+    dotenv.config({path: envLocal, override: true});
   } else if (fs.existsSync(envDefault)) {
-    dotenv.config({path: envDefault});
+    dotenv.config({path: envDefault, override: true});
   }
 } catch {}
 
-const stripeSecret = defineSecret("STRIPE_SECRET_KEY");
-const webhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
+const squareAccessToken = defineSecret("SQUARE_ACCESS_TOKEN");
 
-exports.createPaymentIntent = onCall({secrets: [stripeSecret]}, async (request) => {
+// Safely obtain and sanitize the Square access token (trim whitespace/quotes)
+function getSquareAccessToken() {
   try {
-    // Initialize Stripe with secret (read at runtime so secrets work in prod)
-    const secret = process.env.STRIPE_SECRET_KEY || (typeof stripeSecret.value === "function" ? stripeSecret.value() : undefined);
-    if (!secret) {
+    const fromSecret = (typeof squareAccessToken.value === "function") ? squareAccessToken.value() : undefined;
+    const fromEnv = process.env.SQUARE_ACCESS_TOKEN;
+    // Prefer secret when available (prod); fallback to env (emulator/local)
+    const raw = (fromSecret != null && String(fromSecret).trim() !== "") ? fromSecret : fromEnv;
+    if (!raw) return "";
+    // Convert to string, trim whitespace/newlines, and strip surrounding quotes if any
+    const cleaned = String(raw).trim().replace(/^"+|"+$/g, "");
+    return cleaned;
+  } catch {
+    return "";
+  }
+}
+
+exports.createPayment = onCall({secrets: [squareAccessToken]}, async (request) => {
+  try {
+    // Validate Square access token
+    const accessToken = getSquareAccessToken();
+    if (!accessToken) {
       throw new HttpsError(
           "failed-precondition",
-          "Stripe secret not configured",
-          {hint: "Set STRIPE_SECRET_KEY as a Functions secret (sk_test_...) in Firebase."},
+          "Square access token not configured",
+          {hint: "Set SQUARE_ACCESS_TOKEN as a Functions secret in Firebase."},
       );
     }
-    const stripe = stripeLib(secret);
 
-    const {amount, currency = "gbp", mode, itemsSummary, itemsJson, userEmail, userName} = request.data || {};
+    const {amount, currency = "gbp", locationId, itemsSummary,
+      itemsJson, userEmail, userName} = request.data || {};
 
-    // Optional: prevent common key mismatches (client test vs server live)
-    const isServerLive = /^sk_live_/.test(secret);
-    const isServerTest = /^sk_test_/.test(secret);
-    if (mode === "test" && isServerLive) {
+    // Validate locationId
+    if (!locationId) {
       throw new HttpsError(
-          "failed-precondition",
-          "Key mode mismatch",
-          {details: "Client uses TEST (pk_test_…) but server secret is LIVE (sk_live_…). Set STRIPE_SECRET_KEY to a sk_test_ key from the same Stripe account as your publishable key."},
-      );
-    }
-    if (mode === "live" && isServerTest) {
-      throw new HttpsError(
-          "failed-precondition",
-          "Key mode mismatch",
-          {details: "Client uses LIVE (pk_live_…) but server secret is TEST (sk_test_…). Set STRIPE_SECRET_KEY to a sk_live_ key from the same Stripe account as your publishable key."},
+          "invalid-argument",
+          "Location ID required",
+          {details: "Square requires a location ID for payments."},
       );
     }
 
@@ -145,36 +153,28 @@ exports.createPaymentIntent = onCall({secrets: [stripeSecret]}, async (request) 
       );
     }
 
-    const paymentIntent = await stripe.paymentIntents.create({
+    // Return the amount and currency - client will tokenize the card and complete payment
+    return {
       amount,
-      currency,
-      automatic_payment_methods: {enabled: true},
-      // Ask Stripe to email a receipt to the customer (free from Stripe)
-      receipt_email: userEmail || undefined,
-      metadata: {
-        items: itemsSummary || "",
-        itemsJson: (itemsJson && String(itemsJson).slice(0, 450)) || "",
-        userEmail: userEmail || "",
-        userName: userName || "",
-      },
-      // Optional: add metadata to help reconcile in dashboard
-      // metadata: { userId: request.auth?.uid || 'anon' }
-    });
-    return {clientSecret: paymentIntent.client_secret, id: paymentIntent.id};
+      currency: currency.toUpperCase(),
+      locationId,
+      itemsSummary,
+      itemsJson,
+      userEmail,
+      userName,
+    };
   } catch (err) {
-    console.error("createPaymentIntent error:", err);
+    console.error("createPayment error:", err);
     // If we purposely threw an HttpsError above, pass it through
     if (err instanceof HttpsError) throw err;
-    // Extract rich details from Stripe or other errors
-    const msg = (err && (err.raw && err.raw.message)) || (err && err.message) || "Failed to create payment intent";
+    // Extract error details
+    const msg = (err && err.message) || "Failed to prepare payment";
     const detail = {
       message: msg,
-      type: err && (err.type || (err.raw && err.raw.type)) || undefined,
-      code: err && (err.code || (err.raw && err.raw.code)) || undefined,
-      requestId: err && err.raw && err.raw.requestId || undefined,
+      errors: err && err.errors || undefined,
     };
     // Send generic error code but include details for the client to display
-    throw new HttpsError("internal", "Payment intent failed", detail);
+    throw new HttpsError("internal", "Payment preparation failed", detail);
   }
 });
 
@@ -194,111 +194,333 @@ function initAdmin() {
   }
 }
 
-// Stripe webhook to persist orders and send confirmations
-exports.stripeWebhook = onRequest({secrets: [webhookSecret, stripeSecret]}, async (req, res) => {
+// Process Square payment after client tokenizes the card
+exports.processSquarePayment = onCall({secrets: [squareAccessToken]}, async (request) => {
+  try {
+    // Initialize Square client
+  const accessToken = getSquareAccessToken();
+    if (!accessToken) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Square access token not configured",
+      );
+    }
+
+    const environment = process.env.SQUARE_ENVIRONMENT === "production" ? "production" : "sandbox";
+
+    const {sourceId, amount, currency, locationId, itemsSummary,
+      itemsJson, userEmail, userName, verificationToken,
+      address, city, postcode, countryCode} = request.data || {};
+
+    if (!sourceId || !amount || !locationId) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Missing required payment parameters",
+      );
+    }
+
+    // Create the payment
+    const base = environment === "production" ? "https://connect.squareup.com" : "https://connect.squareupsandbox.com";
+    const idempotencyKey = crypto.randomUUID();
+    const body = {
+      source_id: sourceId,
+      idempotency_key: idempotencyKey,
+      amount_money: {
+        amount: Number(amount),
+        currency: String(currency || "GBP").toUpperCase(),
+      },
+      location_id: locationId,
+      note: itemsSummary || undefined,
+      buyer_email_address: userEmail || undefined,
+    };
+    // Include shipping address if provided
+    if (address || city || postcode || countryCode) {
+      body.shipping_address = {
+        address_line_1: address || undefined,
+        locality: city || undefined,
+        postal_code: postcode || undefined,
+        country: (countryCode || "").toUpperCase() || undefined,
+      };
+    }
+    if (verificationToken) body.verification_token = verificationToken;
+
+    const res = await fetch(`${base}/v2/payments`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Square payments API error ${res.status}: ${text}`);
+    }
+    const paymentResult = await res.json();
+    const payment = paymentResult && paymentResult.payment;
+    if (!payment) {
+      throw new Error("Square payment response missing payment");
+    }
+
+    // Save order to Firestore
+    initAdmin();
+    const db = getFirestore();
+
+    const order = {
+      id: payment.id,
+      amount: Number(payment.amount_money && payment.amount_money.amount),
+      currency: payment.amount_money && payment.amount_money.currency,
+      status: payment.status,
+      created: Timestamp.now(),
+      itemsSummary: itemsSummary || "",
+      items: (() => {
+        try {
+          return itemsJson ? JSON.parse(itemsJson) : [];
+        } catch (e) {
+          return [];
+        }
+      })(),
+      customer: {
+        name: userName || null,
+        email: userEmail || null,
+        address: address || null,
+        city: city || null,
+        postcode: postcode || null,
+        countryCode: countryCode || null,
+      },
+      squarePaymentId: payment.id,
+      squareOrderId: payment.order_id || null,
+      squareReceiptUrl: payment.receipt_url || null,
+    };
+
+    await db.collection("orders").doc(payment.id).set(order, {merge: true});
+    console.log("[processSquarePayment] Order saved:", payment.id);
+
+    // Decrement stock levels for each item
+    const parsedItems = order.items || [];
+    for (const line of parsedItems) {
+      try {
+        const ref = db.collection("furniture").doc(String(line.productId));
+        await db.runTransaction(async (tx) => {
+          const snap = await tx.get(ref);
+          if (!snap.exists) return;
+          const data = snap.data() || {};
+          if (typeof data.stock === "number") {
+            const current = data.stock;
+            const next = Math.max(0, current - Number(line.qty || 0));
+            tx.update(ref, {stock: next});
+          } else {
+            // One-of-a-kind: remove from catalog
+            tx.delete(ref);
+          }
+        });
+        console.log("[processSquarePayment] Inventory updated for", line.productId, "qty", line.qty);
+      } catch (e) {
+        console.error("[processSquarePayment] Failed to update stock for", line && line.productId, e);
+      }
+    }
+
+    return {
+      paymentId: payment.id,
+      status: payment.status,
+      receiptUrl: payment.receipt_url || null,
+    };
+  } catch (err) {
+    console.error("processSquarePayment error:", err);
+    if (err instanceof HttpsError) throw err;
+    const msg = (err && err.message) || "Failed to process payment";
+    throw new HttpsError("internal", "Payment processing failed", {message: msg});
+  }
+});
+
+// Square webhook to handle payment events
+exports.squareWebhook = onRequest(async (req, res) => {
   if (req.method !== "POST") {
-    // Respond OK to GET/HEAD probes to avoid noisy errors in Stripe UI
     res.status(200).send("ok");
     return;
   }
-  const sig = req.headers["stripe-signature"]; // header name is lowercase in Node
-  if (!sig) {
-    res.status(400).send("Missing Stripe-Signature header");
-    return;
-  }
+
   try {
-    const secret = process.env.STRIPE_SECRET_KEY || (typeof stripeSecret.value === "function" ? stripeSecret.value() : undefined);
-    const whSecret = process.env.STRIPE_WEBHOOK_SECRET || (typeof webhookSecret.value === "function" ? webhookSecret.value() : undefined);
-    if (!whSecret) {
-      res.status(500).send("Webhook secret not configured");
-      return;
+    // Note: Webhook signature verification is optional for sandbox testing
+    // In production, configure SQUARE_WEBHOOK_SECRET for security
+    const whSecret = process.env.SQUARE_WEBHOOK_SECRET;
+
+    // Verify webhook signature if configured
+    if (whSecret) {
+      const signature = req.headers["x-square-hmacsha256-signature"];
+      const url = req.headers["x-square-requesturl"] || "";
+      const body = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
+
+      const hmac = crypto.createHmac("sha256", whSecret);
+      hmac.update(url + body.toString());
+      const hash = hmac.digest("base64");
+
+      if (signature !== hash) {
+        console.error("[squareWebhook] Invalid signature");
+        res.status(400).send("Invalid signature");
+        return;
+      }
+    } else {
+      console.warn("[squareWebhook] No webhook secret configured - " +
+          "signature verification disabled");
     }
 
-    // Verify the event with raw body
-    const raw = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
-    const event = stripeLib(secret || "").webhooks.constructEvent(raw, sig, whSecret);
+    const event = req.body;
 
-    if (event.type === "payment_intent.succeeded") {
-  initAdmin();
-  const pi = event.data.object;
-  const db = getFirestore();
-      const charge = (pi.charges && pi.charges.data && pi.charges.data[0]) || {};
-      const billing = charge.billing_details || {};
-      const shipping = pi.shipping || {};
-      const email = billing.email || (pi.metadata && pi.metadata.userEmail) || null;
-      const name = shipping.name || billing.name || (pi.metadata && pi.metadata.userName) || null;
-      const items = (pi.metadata && pi.metadata.items) || "";
-      const itemsJson = (pi.metadata && pi.metadata.itemsJson) || "";
-      const addr = shipping.address || billing.address || {};
+    // Handle payment.created or payment.updated events
+    if (event.type === "payment.created" || event.type === "payment.updated") {
+      const payment = event.data.object.payment;
 
+      // Only process completed payments
+      if (payment.status !== "COMPLETED") {
+        res.status(200).send({received: true});
+        return;
+      }
+
+      initAdmin();
+      const db = getFirestore();
+
+      // Check if order already exists
+      const orderRef = db.collection("orders").doc(payment.id);
+      const orderSnap = await orderRef.get();
+
+      if (orderSnap.exists) {
+        console.log("[squareWebhook] Order already processed:", payment.id);
+        res.status(200).send({received: true});
+        return;
+      }
+
+      // Create order record
       const order = {
-        id: pi.id,
-        amount: pi.amount,
-        currency: pi.currency,
-        status: pi.status,
-  created: Timestamp.fromMillis((pi.created || Math.floor(Date.now()/1000)) * 1000),
-        itemsSummary: items,
-        items: (() => {
-          try {
-            return itemsJson ? JSON.parse(itemsJson) : [];
-          } catch (e) {
-            return [];
-          }
-        })(),
+        id: payment.id,
+        amount: Number(payment.amount_money.amount),
+        currency: payment.amount_money.currency,
+        status: payment.status,
+        created: Timestamp.now(),
+        itemsSummary: payment.note || "",
         customer: {
-          name: name || null,
-          email: email || null,
-          address: {
-            line1: addr.line1 || null,
-            line2: addr.line2 || null,
-            city: addr.city || null,
-            postal_code: addr.postal_code || null,
-            country: addr.country || null,
-          },
+          email: payment.buyer_email_address || null,
         },
+        squarePaymentId: payment.id,
+        squareOrderId: payment.order_id || null,
+        squareReceiptUrl: payment.receipt_url || null,
       };
 
-      try {
-        await db.collection("orders").doc(pi.id).set(order, {merge: true});
-        // eslint-disable-next-line no-console
-        console.log("[stripeWebhook] Order saved:", pi.id);
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error("[stripeWebhook] Failed to save order:", pi.id, e);
-      }
-
-      // Decrement stock levels for each item. If the product has a numeric 'stock' field, decrement.
-      // If the product has no numeric 'stock', treat as a one-of-a-kind and delete the document.
-      const parsedItems = order.items || [];
-      for (const line of parsedItems) {
-        try {
-          if (!line || !line.productId || !line.qty) continue;
-          const ref = db.collection("furniture").doc(String(line.productId));
-          await db.runTransaction(async (tx) => {
-            const snap = await tx.get(ref);
-            if (!snap.exists) return; // no product, skip
-            const data = snap.data() || {};
-            if (typeof data.stock === "number") {
-              const current = data.stock;
-              const next = Math.max(0, current - Number(line.qty || 0));
-              tx.update(ref, {stock: next});
-            } else {
-              // One-of-a-kind (no numeric stock): remove the product from the catalog
-              tx.delete(ref);
-            }
-          });
-          // eslint-disable-next-line no-console
-          console.log("[stripeWebhook] Inventory updated for", line.productId, "qty", line.qty);
-        } catch (e) {
-          // eslint-disable-next-line no-console
-          console.error("[stripeWebhook] Failed to decrement stock for", line && line.productId, e);
-        }
-      }
+      await orderRef.set(order, {merge: true});
+      console.log("[squareWebhook] Order saved:", payment.id);
     }
 
     res.status(200).send({received: true});
   } catch (err) {
-    console.error("webhook error:", err);
+    console.error("[squareWebhook] error:", err);
     res.status(400).send(`Webhook Error: ${err.message || "unknown"}`);
   }
 });
+
+// Diagnostics: list merchant and locations using current Square access token
+exports.squareDiagnostics = onCall({secrets: [squareAccessToken]}, async () => {
+  try {
+    const secretCandidate = (typeof squareAccessToken.value === "function") ? squareAccessToken.value() : undefined;
+    const fromEnv = !(secretCandidate && String(secretCandidate).trim() !== "");
+    const accessToken = getSquareAccessToken();
+    if (!accessToken) {
+      throw new HttpsError("failed-precondition", "Square access token not configured");
+    }
+    // Determine target env for normal use
+    const environment = process.env.SQUARE_ENVIRONMENT === "production" ? "production" : "sandbox";
+
+    // Simple token preview for debugging (mask value)
+    const tokenStr = String(accessToken);
+    let tokenPreview;
+    if (tokenStr.length >= 12) {
+      tokenPreview = `${tokenStr.substring(0, 6)}...${tokenStr.substring(tokenStr.length - 4)}`;
+    } else {
+      tokenPreview = `${tokenStr.substring(0, 3)}...`;
+    }
+
+    // Perform direct HTTP calls (bypassing SDK) from within the function
+    const directCall = async (path) => {
+      const base = environment === "sandbox" ?
+        "https://connect.squareupsandbox.com" :
+        "https://connect.squareup.com";
+      const url = `${base}${path}`;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Accept": "application/json",
+        },
+      });
+      let bodyText = "";
+      try {
+        bodyText = await res.text();
+      } catch {}
+      return { status: res.status, ok: res.ok, body: bodyText && bodyText.substring(0, 500) };
+    };
+
+    let directMerchants;
+    let directLocations;
+    try {
+      directMerchants = await directCall("/v2/merchants");
+    } catch (e) {
+      directMerchants = { error: e && (e.message || "direct merchants failed") };
+    }
+    try {
+      directLocations = await directCall("/v2/locations");
+    } catch (e) {
+      directLocations = { error: e && (e.message || "direct locations failed") };
+    }
+
+    // Opposite environment direct calls
+    const directCallOpp = async (path) => {
+      const base = environment === "sandbox" ?
+        "https://connect.squareup.com" :
+        "https://connect.squareupsandbox.com";
+      const url = `${base}${path}`;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Accept": "application/json",
+        },
+      });
+      let bodyText = "";
+      try {
+        bodyText = await res.text();
+      } catch {}
+      return { status: res.status, ok: res.ok, body: bodyText && bodyText.substring(0, 500) };
+    };
+    let directMerchantsOpp;
+    let directLocationsOpp;
+    try {
+      directMerchantsOpp = await directCallOpp("/v2/merchants");
+    } catch (e) {
+      directMerchantsOpp = { error: e && (e.message || "direct merchants opp failed") };
+    }
+    try {
+      directLocationsOpp = await directCallOpp("/v2/locations");
+    } catch (e) {
+      directLocationsOpp = { error: e && (e.message || "direct locations opp failed") };
+    }
+
+    return {
+      environment: process.env.SQUARE_ENVIRONMENT || "sandbox",
+      tokenSource: fromEnv ? "env" : "secret",
+      tokenLength: tokenStr.length,
+      tokenPreview,
+      oppositeEnvironment: environment === "sandbox" ? "production" : "sandbox",
+      merchantsOpposite: [directMerchantsOpp],
+      locationsOpposite: [directLocationsOpp],
+      direct: {
+        merchants: directMerchants,
+        locations: directLocations,
+      },
+    };
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", "Diagnostics failed", { message: err && err.message });
+  }
+});
+
+// (adminAddItem removed after use for security)

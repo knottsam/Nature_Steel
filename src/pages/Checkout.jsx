@@ -1,41 +1,30 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useCart } from '../context/CartContext.jsx'
 import { formatPrice } from '../utils/currency.js'
-import { loadStripe } from '@stripe/stripe-js'
-import { Elements, CardElement, useElements, useStripe } from '@stripe/react-stripe-js'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '../firebase'
-const stripePublishableKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
-const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null
+
+const squareApplicationId = import.meta.env.VITE_SQUARE_APPLICATION_ID
+const squareLocationId = import.meta.env.VITE_SQUARE_LOCATION_ID
+const squareEnvironment = import.meta.env.VITE_SQUARE_ENVIRONMENT || 'sandbox'
 
 export default function Checkout() {
   const { items, subtotal } = useCart()
   const [placed, setPlaced] = useState(false)
 
-  if (!stripePublishableKey) {
+  if (!squareApplicationId || !squareLocationId) {
     return (
       <div className="card">
-        <h2>Stripe not configured</h2>
+        <h2>Square not configured</h2>
         <p>
-          Add your publishable key in <code>.env.local</code> at the project root:
+          Add your Square credentials in <code>.env.local</code> at the project root:
         </p>
         <pre style={{background:'#f6f8fa', padding:12, borderRadius:6}}>
-{`VITE_STRIPE_PUBLISHABLE_KEY=pk_test_XXXXXXXXXXXXXXXXXXXXXXXX`}
+{`VITE_SQUARE_APPLICATION_ID=sandbox-sq0idb-XXXXXXXXXXXXXXXXXXXXXXXX
+VITE_SQUARE_LOCATION_ID=XXXXXXXXXXXXX
+VITE_SQUARE_ENVIRONMENT=sandbox`}
         </pre>
         <p>Then restart the dev server.</p>
-      </div>
-    )
-  }
-
-  // Warn if using emulator with a live publishable key (mismatch)
-  if (import.meta.env.VITE_USE_FUNCTIONS_EMULATOR === '1' && stripePublishableKey?.startsWith('pk_live_')) {
-    return (
-      <div className="card">
-        <h2>Key mismatch</h2>
-        <p>
-          You are using the Functions emulator but a <strong>live</strong> publishable key. Use a <code>pk_test_</code> key for testing,
-          or disable the emulator by setting <code>VITE_USE_FUNCTIONS_EMULATOR=0</code> in <code>.env.local</code>.
-        </p>
       </div>
     )
   }
@@ -49,16 +38,10 @@ export default function Checkout() {
     )
   }
 
-  return (
-    <Elements stripe={stripePromise}>
-      <CheckoutForm items={items} subtotal={subtotal} onPlaced={() => setPlaced(true)} />
-    </Elements>
-  )
+  return <CheckoutForm items={items} subtotal={subtotal} onPlaced={() => setPlaced(true)} />
 }
 
 function CheckoutForm({ items, subtotal, onPlaced }) {
-  const stripe = useStripe()
-  const elements = useElements()
   const { clearCart } = useCart()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -68,11 +51,101 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
   const [country, setCountry] = useState('United Kingdom')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [card, setCard] = useState(null)
+  const [payments, setPayments] = useState(null)
+  const cardInstanceRef = useRef(null)
+
+  // Initialize Square Web Payments SDK - only once
+  useEffect(() => {
+    console.log('[checkout] useEffect running, cardInstanceRef:', cardInstanceRef.current)
+    // Prevent double initialization (React StrictMode/dev or fast refresh)
+    if (cardInstanceRef.current || (typeof window !== 'undefined' && window.__NS_SQUARE_CARD_MOUNTED)) {
+      console.log('[checkout] Card already initialized, skipping')
+      return
+    }
+
+    let mounted = true
+    let localCardInstance = null
+
+    async function initSquare() {
+      console.log('[checkout] initSquare called')
+      if (!window.Square) {
+        console.error('[checkout] Square.js failed to load')
+        if (mounted) setError('Payment system failed to load. Please refresh the page.')
+        return
+      }
+
+      console.log('[checkout] Square SDK loaded, initializing...')
+      try {
+        const paymentsInstance = window.Square.payments(squareApplicationId, squareLocationId)
+        console.log('[checkout] Payments instance created:', paymentsInstance)
+        
+        const cardInstance = await paymentsInstance.card()
+        console.log('[checkout] Card instance created:', cardInstance)
+        
+        // If the container already has children, clear it before attaching
+        const container = document.getElementById('card-container')
+        if (container && container.childElementCount > 0) {
+          container.innerHTML = ''
+        }
+
+        await cardInstance.attach('#card-container')
+        console.log('[checkout] Card attached to container')
+        
+        // Store in ref to prevent re-initialization
+        cardInstanceRef.current = cardInstance
+        localCardInstance = cardInstance
+        if (typeof window !== 'undefined') {
+          window.__NS_SQUARE_CARD_MOUNTED = true
+        }
+        
+        if (mounted) {
+          setPayments(paymentsInstance)
+          setCard(cardInstance)
+          console.log('[checkout] Card state updated, card:', cardInstance)
+        }
+      } catch (e) {
+        console.error('[checkout] Failed to initialize Square:', e)
+        if (mounted) setError('Failed to initialize payment form. Please refresh the page.')
+      }
+    }
+
+    initSquare()
+
+    return () => {
+      console.log('[checkout] Cleanup running')
+      mounted = false
+      try {
+        // Prefer local instance; fallback to ref
+        const inst = localCardInstance || cardInstanceRef.current
+        if (inst && typeof inst.destroy === 'function') {
+          inst.destroy()
+        }
+      } catch (e) {
+        // ignore
+      }
+      try {
+        const container = document.getElementById('card-container')
+        if (container) container.innerHTML = ''
+      } catch {}
+      if (typeof window !== 'undefined') {
+        window.__NS_SQUARE_CARD_MOUNTED = false
+      }
+      cardInstanceRef.current = null
+    }
+  }, []) // Empty dependency array - run only once
 
   async function onSubmit(e) {
     e.preventDefault()
     setError('')
-    if (!stripe || !elements) return
+    
+    console.log('[checkout] Submit started', { card, payments })
+    
+    if (!card || !payments) {
+      setError('Payment form not ready. Please wait or refresh the page.')
+      return
+    }
+
     if (!Number.isInteger(subtotal) || subtotal <= 0) {
       setError('Your cart is empty or invalid total.')
       return
@@ -80,52 +153,67 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
 
     setLoading(true)
     try {
-  const createPaymentIntent = httpsCallable(functions, 'createPaymentIntent')
-  const mode = stripePublishableKey?.startsWith('pk_live_') ? 'live' : 'test'
-  const itemsSummary = items.map(i => `${i.product?.name || 'Item'}×${i.qty}`).join(', ').slice(0, 450)
-  const itemsJson = JSON.stringify(items.map(i => ({ productId: i.product?.id || i.productId, qty: i.qty }))).slice(0, 450)
-  const res = await createPaymentIntent({ amount: subtotal, currency: 'gbp', mode, itemsSummary, itemsJson, userEmail: email, userName: name })
-      const clientSecret = res?.data?.clientSecret
-      if (!clientSecret) throw new Error('No client secret returned from server')
-
-      const card = elements.getElement(CardElement)
-      if (!card) throw new Error('Card element not ready')
-
-      const { error: confirmErr, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-        payment_method: {
-          card,
-          billing_details: {
-            name,
-            email,
-            address: {
-              line1: address,
-              city,
-              postal_code: postcode,
-              country: countryCodeFromName(country) || undefined,
-            },
-          },
-        },
-        shipping: {
-          name,
-          address: {
-            line1: address,
-            city,
-            postal_code: postcode,
-            country: countryCodeFromName(country) || undefined,
-          },
-        },
+      console.log('[checkout] Step 1: Preparing payment...')
+      // Step 1: Validate stock and prepare payment data
+      const createPayment = httpsCallable(functions, 'createPayment')
+      const itemsSummary = items.map(i => `${i.product?.name || 'Item'}×${i.qty}`).join(', ').slice(0, 450)
+      const itemsJson = JSON.stringify(items.map(i => ({ productId: i.product?.id || i.productId, qty: i.qty }))).slice(0, 450)
+      
+      const prepareRes = await createPayment({ 
+        amount: subtotal, 
+        currency: 'gbp',
+        locationId: squareLocationId,
+        itemsSummary, 
+        itemsJson, 
+        userEmail: email, 
+        userName: name,
+        address,
+        city,
+        postcode,
+        countryCode: countryCodeFromName(country) || 'GB',
       })
 
-      if (confirmErr) throw new Error(confirmErr.message || 'Payment failed')
-      if (paymentIntent?.status === 'succeeded') {
-        // Clear the cart now that payment succeeded
-        try { clearCart() } catch {}
-        onPlaced()
+      console.log('[checkout] Prepare response:', prepareRes)
+      if (!prepareRes?.data) throw new Error('Failed to prepare payment')
+
+      console.log('[checkout] Step 2: Tokenizing card...')
+      // Step 2: Tokenize the card
+      const tokenResult = await card.tokenize()
+      console.log('[checkout] Token result:', tokenResult)
+      
+      if (tokenResult.status === 'OK') {
+        console.log('[checkout] Step 3: Processing payment...')
+        // Step 3: Process payment with the token
+        const processPayment = httpsCallable(functions, 'processSquarePayment')
+        const paymentRes = await processPayment({
+          sourceId: tokenResult.token,
+          amount: subtotal,
+          currency: 'GBP',
+          locationId: squareLocationId,
+          itemsSummary,
+          itemsJson,
+          userEmail: email,
+          userName: name,
+          address,
+          city,
+          postcode,
+          countryCode: countryCodeFromName(country) || 'GB',
+          verificationToken: tokenResult.details?.card?.verificationToken,
+        })
+
+        console.log('[checkout] Payment response:', paymentRes)
+        if (paymentRes?.data?.status === 'COMPLETED') {
+          // Clear the cart now that payment succeeded
+          try { clearCart() } catch {}
+          onPlaced()
+        } else {
+          throw new Error(`Payment status: ${paymentRes?.data?.status || 'unknown'}`)
+        }
+      } else {
+        const errorMessages = tokenResult.errors?.map(e => e.message).join(', ') || 'Card tokenization failed'
+        throw new Error(errorMessages)
       }
-      else throw new Error(`Payment status: ${paymentIntent?.status}`)
     } catch (err) {
-      // Surface rich error info from the callable/Stripe to help diagnose
-      // eslint-disable-next-line no-console
       console.error('[checkout] Error during payment:', err)
       const code = (err?.code || '').replace('functions/', '')
       const details = err?.details || err?.customData?.serverResponse || err?.customData?.message
@@ -139,6 +227,7 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
       setError(code ? `${code}: ${msg}` : msg)
     } finally {
       setLoading(false)
+      console.log('[checkout] Submit finished')
     }
   }
 
@@ -155,16 +244,34 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
             <div className="field" style={{flex:1}}><label>Country</label><input required value={country} onChange={e=>setCountry(e.target.value)} /></div>
           </div>
           <div className="divider" />
-    <h2>Payment</h2>
-    <div className="field"><label>Email</label><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} /></div>
+          <h2>Payment</h2>
+          <p style={{color: 'var(--text-dim)', fontSize: '0.9rem', marginBottom: '1rem'}}>
+            💳 Secure payment powered by <strong style={{color: 'var(--primary)'}}>Square</strong>
+          </p>
+          <div className="field"><label>Email</label><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} /></div>
           <div className="field">
-            <label>Card</label>
-            <div style={{padding:'.62rem .72rem', border:'1.5px solid var(--border)', borderRadius:9}}>
-              <CardElement options={{ hidePostalCode: true }} />
-            </div>
+            <label>Card Details</label>
+            <div id="card-container" style={{
+              padding:'.72rem .82rem', 
+              border:'1.5px solid var(--border)', 
+              borderRadius:9, 
+              minHeight: 56,
+              background: 'var(--surface)',
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)'
+            }}></div>
+            <p style={{fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.5rem'}}>
+              🔒 Your payment information is encrypted and secure
+            </p>
           </div>
           {error && <div style={{ color:'crimson', marginTop: 8 }}>{error}</div>}
-          <button className="btn" disabled={loading || !stripe}>{loading ? 'Processing…' : `Pay ${formatPrice(subtotal)}`}</button>
+          <button 
+            type="submit" 
+            className="btn" 
+            disabled={loading || !card}
+            onClick={() => console.log('[checkout] Button clicked! Card state:', card)}
+          >
+            {loading ? 'Processing…' : `Pay ${formatPrice(subtotal)}`}
+          </button>
         </form>
       </div>
       <div className="card">

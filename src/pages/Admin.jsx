@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { db, storage } from '../firebase';
-import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc, updateDoc, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 
@@ -29,6 +29,12 @@ export default function Admin() {
   const [editId, setEditId] = useState(null);
   const [existingImages, setExistingImages] = useState([]);
   const [imagesToDelete, setImagesToDelete] = useState([]);
+  // Admin mode: 'orders' or 'inventory'
+  const [mode, setMode] = useState('orders');
+  // Orders state
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState('');
 
   React.useEffect(() => {
     const auth = getAuth();
@@ -61,6 +67,25 @@ export default function Admin() {
       fetchItems();
     }
   }, [success, user]); // refetch when success changes or user signs in
+
+  // Fetch orders when in orders mode
+  React.useEffect(() => {
+    async function fetchOrders() {
+      setOrdersLoading(true);
+      setOrdersError('');
+      try {
+        const q = query(collection(db, 'orders'), orderBy('created', 'desc'));
+        const snap = await getDocs(q);
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setOrders(list);
+      } catch (err) {
+        console.error('[Admin] Orders fetch error:', err);
+        setOrdersError('Failed to load orders: ' + (err?.message || 'unknown'));
+      }
+      setOrdersLoading(false);
+    }
+    if (user && mode === 'orders') fetchOrders();
+  }, [user, mode, success]);
 
   const handleGoogleLogin = async () => {
     setAuthError('');
@@ -245,9 +270,37 @@ export default function Admin() {
 
   return (
     <>
-      <div style={{ maxWidth: 400, margin: '2rem auto' }}>
+      {/* Mode switcher */}
+      <div style={{ maxWidth: 800, margin: '2rem auto' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12 }}>
+          <h2 style={{ margin: 0 }}>Admin</h2>
+          <button onClick={handleLogout}>Sign Out</button>
+        </div>
+        <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+          <button
+            onClick={() => setMode('orders')}
+            className={mode === 'orders' ? 'btn' : ''}
+            style={{ padding:'8px 12px', borderRadius:8, border:'1px solid var(--border)', background: mode==='orders' ? 'var(--primary)' : 'var(--surface)', color: mode==='orders' ? 'white' : 'var(--text)'}}
+          >Check orders</button>
+          <button
+            onClick={() => setMode('inventory')}
+            className={mode === 'inventory' ? 'btn' : ''}
+            style={{ padding:'8px 12px', borderRadius:8, border:'1px solid var(--border)', background: mode==='inventory' ? 'var(--primary)' : 'var(--surface)', color: mode==='inventory' ? 'white' : 'var(--text)'}}
+          >Update stock</button>
+        </div>
+      </div>
+
+      {mode === 'orders' && (
+        <div style={{ maxWidth: 1000, margin: '0 auto 2rem' }}>
+          <h3 style={{ marginBottom: 8 }}>Orders</h3>
+          <OrdersTable orders={orders} loading={ordersLoading} error={ordersError} />
+        </div>
+      )}
+
+  {mode === 'inventory' && (
+  <div>
+  <div style={{ maxWidth: 400, margin: '2rem auto' }}>
         <h2>{editId ? 'Edit' : 'Add New'} Item</h2>
-        <button onClick={handleLogout} style={{ float: 'right', marginBottom: 16 }}>Sign Out</button>
         <div style={{
           border: '1px solid var(--border)',
           borderRadius: 8,
@@ -369,8 +422,8 @@ export default function Admin() {
         </form>
         {success && <div style={{ color: 'green', marginTop: 8 }}>Upload successful!</div>}
         {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
-      </div>
-      <hr style={{ margin: '2rem 0' }} />
+  </div>
+  <hr style={{ margin: '2rem 0' }} />
       <h3>Existing Items</h3>
       {loading ? <div>Loading...</div> : (
         <div className="admin-items-grid">
@@ -385,12 +438,112 @@ export default function Admin() {
             }}>
               <strong>{item.name}</strong><br />
               {item.images && item.images[0] && <img src={item.images[0]} alt={item.name} style={{ maxWidth: '100%', maxHeight: 100, borderRadius: 8, margin: '8px 0' }} />}<br />
+              <div style={{ display:'flex', alignItems:'center', gap:8, margin:'6px 0' }}>
+                <label style={{ fontSize:12, color:'var(--muted)' }}>Stock:</label>
+                <input type="number" value={Number(item.stock ?? 0)} onChange={e => {
+                  const v = parseInt(e.target.value || '0', 10);
+                  setItems(prev => prev.map(it => it.id === item.id ? { ...it, stock: v } : it));
+                }} style={{ width:80 }} />
+                <button onClick={async () => {
+                  try {
+                    await updateDoc(doc(db, 'furniture', item.id), { stock: Number(item.stock ?? 0) });
+                  } catch (err) {
+                    alert('Failed to save stock: ' + (err?.message || 'unknown'))
+                  }
+                }}>Save</button>
+              </div>
               <button onClick={() => handleEdit(item)} style={{ marginRight: 8, marginBottom: 6 }}>Edit</button>
               <button onClick={() => handleDelete(item.id)} style={{ color: 'red', marginTop: 0 }}>Delete</button>
             </div>
           ))}
         </div>
+  )}
+  </div>
       )}
     </>
+  );
+}
+
+function OrdersTable({ orders, loading, error }) {
+  const [downloading, setDownloading] = useState(false);
+
+  const exportCsv = () => {
+    try {
+      setDownloading(true);
+      const header = [
+        'id','amount','currency','status','created','customer.name','customer.email','customer.address','customer.city','customer.postcode','customer.countryCode','receiptUrl'
+      ];
+      const rows = orders.map(o => [
+        o.id,
+        o.amount,
+        o.currency,
+        o.status,
+        o.created && o.created.toDate ? o.created.toDate().toISOString() : '',
+        o.customer?.name || '',
+        o.customer?.email || '',
+        o.customer?.address || '',
+        o.customer?.city || '',
+        o.customer?.postcode || '',
+        o.customer?.countryCode || '',
+        o.squareReceiptUrl || ''
+      ]);
+      const csv = [header, ...rows].map(r => r.map(cell => {
+        const s = String(cell ?? '');
+        if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+          return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+      }).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `orders-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  if (loading) return <div>Loading orders…</div>;
+  if (error) return <div style={{ color:'red' }}>{error}</div>;
+  if (!orders || orders.length === 0) return <div>No orders yet.</div>;
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
+        <div style={{fontSize:12, color:'var(--muted)'}}>Total: {orders.length}</div>
+        <button onClick={exportCsv} disabled={downloading}>Export CSV</button>
+      </div>
+      <div style={{ overflowX:'auto' }}>
+        <table style={{ width:'100%', borderCollapse:'collapse' }}>
+          <thead>
+            <tr style={{ textAlign:'left', borderBottom:'1px solid var(--border)' }}>
+              <th>Created</th>
+              <th>Status</th>
+              <th>Amount</th>
+              <th>Customer</th>
+              <th>Email</th>
+              <th>Items</th>
+              <th>Receipt</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map(o => (
+              <tr key={o.id} style={{ borderBottom:'1px solid var(--border)' }}>
+                <td>{o.created && o.created.toDate ? o.created.toDate().toLocaleString() : ''}</td>
+                <td>{o.status}</td>
+                <td>{typeof o.amount === 'number' ? `£${(o.amount/100).toFixed(2)}` : ''} {o.currency}</td>
+                <td>{o.customer?.name || '—'}</td>
+                <td>{o.customer?.email || '—'}</td>
+                <td style={{ maxWidth:320, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{o.itemsSummary || ''}</td>
+                <td>{o.squareReceiptUrl ? <a href={o.squareReceiptUrl} target="_blank" rel="noreferrer">Receipt</a> : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

@@ -1,0 +1,5 @@
+Use this key in the x-admin-key header when calling adminAddItem:
+
+<PLACEHOLDER>
+
+Note: This file is informational only; the actual key used at runtime is set from functions environment variable ADMIN_API_KEY or a generated fallback at deploy time.

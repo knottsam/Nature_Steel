@@ -1,0 +1,2 @@
+This utility script was used temporarily to add an item via the HTTP adminAddItem function.
+The adminAddItem function has been removed for security. This file remains as a note.
