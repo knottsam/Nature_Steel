@@ -52,12 +52,126 @@ function readSecret(secret, envKey) {
 }
 }
 
+function firstHeaderValue(value) {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+function resolveBodyBuffer(req) {
+  const raw = req && req.rawBody;
+  if (raw != null) {
+    if (Buffer.isBuffer(raw)) return raw;
+    if (raw instanceof Uint8Array) return Buffer.from(raw);
+    if (typeof raw === "string") return Buffer.from(raw, "utf8");
+  }
+  const fallback = req && req.body != null ? JSON.stringify(req.body) : "";
+  return Buffer.from(fallback, "utf8");
+}
+
+function normalizeSquareRequest(req, fallbackPath = "/squareWebhook") {
+  const headers = req && req.headers ? req.headers : {};
+  const signatureHeader = firstHeaderValue(headers["x-square-hmacsha256-signature"]);
+  const signatureVersion = String(firstHeaderValue(headers["x-square-signature-version"]) || "1");
+  const sentAt = firstHeaderValue(headers["x-square-sent-at"]) || "";
+  const urlHeader = firstHeaderValue(headers["x-square-request-url"]);
+
+  const forwardedProtoRaw = typeof req.get === "function" ? req.get("x-forwarded-proto") : undefined;
+  const forwardedProto = typeof forwardedProtoRaw === "string" && forwardedProtoRaw.trim() !== "" ?
+    forwardedProtoRaw.split(",")[0].trim() :
+    undefined;
+  const protocol = forwardedProto || req.protocol || "https";
+  const host = typeof req.get === "function" ? req.get("host") : (req && req.host) || "";
+  const pathFromRequest =
+    (typeof req.originalUrl === "string" && req.originalUrl.length > 0) ? req.originalUrl :
+    (typeof req.url === "string" && req.url.length > 0) ? req.url :
+    (typeof req.path === "string" && req.path.length > 0) ? req.path :
+    "/";
+  const normalizedPath = (typeof pathFromRequest === "string" && pathFromRequest !== "/") ?
+    pathFromRequest :
+    fallbackPath;
+  const requestUrl = (typeof urlHeader === "string" && urlHeader.trim() !== "") ?
+    urlHeader.trim() :
+    `${protocol}://${host}${normalizedPath}`;
+
+  const bodyBuffer = resolveBodyBuffer(req);
+  const bodyString = bodyBuffer.toString("utf8");
+
+  return {
+    signatureHeader,
+    signatureVersion,
+    sentAt,
+    urlHeader,
+    requestUrl,
+    normalizedPath,
+    pathFromRequest,
+    bodyString,
+    rawBodyType: req.rawBody ? Object.prototype.toString.call(req.rawBody) : null,
+    rawBodyIsBuffer: Boolean(req.rawBody && Buffer.isBuffer(req.rawBody)),
+  };
+}
+
+function validateSquareSignature(req, secret, options = {}) {
+  const fallbackPath = options.fallbackPath || "/squareWebhook";
+  const context = normalizeSquareRequest(req, fallbackPath);
+  const {signatureHeader, signatureVersion, sentAt, requestUrl, bodyString} = context;
+
+  if (!signatureHeader) {
+    return {valid: false, code: "missing-signature", message: "Missing signature header"};
+  }
+
+  const payloadToSign = (signatureVersion === "2" && sentAt) ?
+    `${sentAt}${requestUrl}${bodyString}` :
+    `${requestUrl}${bodyString}`;
+
+  const hmac = crypto.createHmac("sha256", secret);
+  hmac.update(payloadToSign);
+  const expectedSignature = hmac.digest("base64");
+
+  let providedBuffer;
+  let expectedBuffer;
+  try {
+    providedBuffer = Buffer.from(signatureHeader, "base64");
+    expectedBuffer = Buffer.from(expectedSignature, "base64");
+  } catch (convertErr) {
+    return {
+      valid: false,
+      code: "invalid-encoding",
+      message: "Invalid signature encoding",
+      error: convertErr,
+      context: {...context, payloadToSign, expectedSignature},
+    };
+  }
+
+  const signaturesMatch =
+    providedBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+
+  if (!signaturesMatch) {
+    return {
+      valid: false,
+      code: "mismatch",
+      message: "Invalid signature",
+      context: {...context, payloadToSign, expectedSignature},
+    };
+  }
+
+  return {
+    valid: true,
+    context: {...context, payloadToSign, expectedSignature},
+  };
+}
+
 function getSquarePublicConfig() {
   const applicationId = readSecret(squareApplicationId, "SQUARE_APPLICATION_ID");
   const locationId = readSecret(squareLocationId, "SQUARE_LOCATION_ID");
   const environmentRaw = readSecret(squareEnvironment, "SQUARE_ENVIRONMENT") || "sandbox";
   const environment = environmentRaw.toLowerCase() === "production" ? "production" : "sandbox";
   return {applicationId, locationId, environment};
+}
+
+function getSquareEnvironment() {
+  const envRaw = readSecret(squareEnvironment, "SQUARE_ENVIRONMENT") || process.env.SQUARE_ENVIRONMENT || "sandbox";
+  return String(envRaw).toLowerCase() === "production" ? "production" : "sandbox";
 }
 
 exports.getSquarePublicConfig = onCall({
@@ -268,7 +382,7 @@ function initAdmin() {
 }
 
 // Process Square payment after client tokenizes the card
-exports.processSquarePayment = onCall({secrets: [squareAccessToken]}, async (request) => {
+exports.processSquarePayment = onCall({secrets: [squareAccessToken, squareEnvironment]}, async (request) => {
   try {
     assertAppCheck(request);
     // Initialize Square client
@@ -280,7 +394,7 @@ exports.processSquarePayment = onCall({secrets: [squareAccessToken]}, async (req
       );
     }
 
-    const environment = process.env.SQUARE_ENVIRONMENT === "production" ? "production" : "sandbox";
+  const environment = getSquareEnvironment();
 
     const {sourceId, amount, currency, locationId, itemsSummary,
       itemsJson, userEmail, userName, verificationToken,
@@ -431,7 +545,7 @@ exports.squareWebhook = onRequest({
   }
 
   try {
-  const whSecret = readSecret(squareWebhookSecret, "SQUARE_WEBHOOK_SECRET");
+    const whSecret = readSecret(squareWebhookSecret, "SQUARE_WEBHOOK_SECRET");
 
     if (!whSecret) {
       console.error("[squareWebhook] Missing SQUARE_WEBHOOK_SECRET");
@@ -439,85 +553,41 @@ exports.squareWebhook = onRequest({
       return;
     }
 
-    // Verify webhook signature (required when secret is set)
-    const signatureHeader = req.headers["x-square-hmacsha256-signature"];
-    if (!signatureHeader) {
-      console.error("[squareWebhook] Missing signature header");
-      res.status(400).send("Missing signature");
-      return;
-    }
-    const urlHeader = req.headers["x-square-request-url"];
-    const signatureVersion = String(req.headers["x-square-signature-version"] || "1");
-    const sentAt = req.headers["x-square-sent-at"] || "";
-    const forwardedProto = req.get("x-forwarded-proto");
-    const protocol = (typeof forwardedProto === "string" && forwardedProto.trim() !== "") ?
-      forwardedProto.split(",")[0].trim() :
-      (req.protocol || "https");
-    const pathFromRequest =
-      (typeof req.originalUrl === "string" && req.originalUrl.length > 0) ? req.originalUrl :
-      (typeof req.url === "string" && req.url.length > 0) ? req.url :
-      (typeof req.path === "string" && req.path.length > 0) ? req.path :
-      "/";
     const fallbackPath = process.env.SQUARE_WEBHOOK_PATH || "/squareWebhook";
-    const normalizedPath = (typeof pathFromRequest === "string" && pathFromRequest !== "/") ?
-      pathFromRequest :
-      fallbackPath;
-    const requestUrl = (typeof urlHeader === "string" && urlHeader.trim() !== "") ?
-      urlHeader.trim() :
-      `${protocol}://${req.get("host")}${normalizedPath}`;
+    const validation = validateSquareSignature(req, whSecret, {fallbackPath});
 
-    let bodyBuffer;
-    if (req.rawBody != null) {
-      if (Buffer.isBuffer(req.rawBody)) {
-        bodyBuffer = req.rawBody;
-      } else if (req.rawBody instanceof Uint8Array) {
-        bodyBuffer = Buffer.from(req.rawBody);
-      } else if (typeof req.rawBody === "string") {
-        bodyBuffer = Buffer.from(req.rawBody, "utf8");
+    if (!validation.valid) {
+      if (validation.code === "missing-signature") {
+        console.error("[squareWebhook] Missing signature header");
+        res.status(400).send("Missing signature");
+        return;
       }
-    }
-    if (!bodyBuffer) {
-      const fallback = req.body != null ? JSON.stringify(req.body) : "";
-      bodyBuffer = Buffer.from(fallback, "utf8");
-    }
-    const bodyString = bodyBuffer.toString("utf8");
 
-    const hmac = crypto.createHmac("sha256", whSecret);
-    const payloadToSign = (signatureVersion === "2" && sentAt) ?
-      `${sentAt}${requestUrl}${bodyString}` :
-      `${requestUrl}${bodyString}`;
-    hmac.update(payloadToSign);
-    const expectedSignature = hmac.digest("base64");
+      if (validation.code === "invalid-encoding") {
+        console.error("[squareWebhook] Failed to decode signatures", validation.error);
+        res.status(400).send("Invalid signature encoding");
+        return;
+      }
 
-    let providedBuffer;
-    let expectedBuffer;
-    try {
-      providedBuffer = Buffer.from(signatureHeader, "base64");
-      expectedBuffer = Buffer.from(expectedSignature, "base64");
-    } catch (convertErr) {
-      console.error("[squareWebhook] Failed to decode signatures", convertErr);
-      res.status(400).send("Invalid signature encoding");
-      return;
-    }
+      if (validation.code === "mismatch") {
+        const ctx = validation.context;
+        console.error("[squareWebhook] Invalid signature", {
+          signatureHeader: ctx.signatureHeader.slice(0, 8),
+          expectedPreview: ctx.expectedSignature.slice(0, 8),
+          requestUrl: ctx.requestUrl,
+          signatureVersion: ctx.signatureVersion,
+          sentAtPreview: ctx.sentAt.slice(0, 8),
+          urlHeaderPreview: typeof ctx.urlHeader === "string" ? ctx.urlHeader.slice(0, 32) : null,
+          derivedPath: ctx.pathFromRequest,
+          normalizedPath: ctx.normalizedPath,
+          rawBodyType: ctx.rawBodyType,
+          rawBodyIsBuffer: ctx.rawBodyIsBuffer,
+        });
+        res.status(400).send("Invalid signature");
+        return;
+      }
 
-    const signaturesMatch =
-      providedBuffer.length === expectedBuffer.length &&
-      crypto.timingSafeEqual(providedBuffer, expectedBuffer);
-
-    if (!signaturesMatch) {
-      console.error("[squareWebhook] Invalid signature", {
-        signatureHeader: signatureHeader.slice(0, 8),
-        expectedPreview: expectedSignature.slice(0, 8),
-        requestUrl,
-        signatureVersion,
-        sentAtPreview: sentAt.slice(0, 8),
-        urlHeaderPreview: typeof urlHeader === "string" ? urlHeader.slice(0, 32) : null,
-        derivedPath: pathFromRequest,
-        normalizedPath,
-        rawBodyType: req.rawBody ? Object.prototype.toString.call(req.rawBody) : null,
-        rawBodyIsBuffer: Boolean(req.rawBody && Buffer.isBuffer(req.rawBody)),
-      });
-      res.status(400).send("Invalid signature");
+      res.status(400).send(validation.message || "Invalid signature");
       return;
     }
 
@@ -574,7 +644,7 @@ exports.squareWebhook = onRequest({
 });
 
 // Diagnostics: list merchant and locations using current Square access token
-exports.squareDiagnostics = onCall({secrets: [squareAccessToken]}, async (request) => {
+exports.squareDiagnostics = onCall({secrets: [squareAccessToken, squareEnvironment]}, async (request) => {
   try {
     assertAppCheck(request);
     const secretCandidate = (typeof squareAccessToken.value === "function") ? squareAccessToken.value() : undefined;
@@ -584,7 +654,7 @@ exports.squareDiagnostics = onCall({secrets: [squareAccessToken]}, async (reques
       throw new HttpsError("failed-precondition", "Square access token not configured");
     }
     // Determine target env for normal use
-    const environment = process.env.SQUARE_ENVIRONMENT === "production" ? "production" : "sandbox";
+  const environment = getSquareEnvironment();
 
     // Simple token preview for debugging (mask value)
     const tokenStr = String(accessToken);
@@ -661,7 +731,7 @@ exports.squareDiagnostics = onCall({secrets: [squareAccessToken]}, async (reques
     }
 
     return {
-      environment: process.env.SQUARE_ENVIRONMENT || "sandbox",
+  environment: getSquareEnvironment(),
       tokenSource: fromEnv ? "env" : "secret",
       tokenLength: tokenStr.length,
       tokenPreview,
@@ -680,3 +750,6 @@ exports.squareDiagnostics = onCall({secrets: [squareAccessToken]}, async (reques
 });
 
 // (adminAddItem removed after use for security)
+
+exports._normalizeSquareRequest = normalizeSquareRequest;
+exports._validateSquareSignature = validateSquareSignature;

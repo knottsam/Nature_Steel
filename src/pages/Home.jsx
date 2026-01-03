@@ -16,7 +16,7 @@ const FEATURE_HIGHLIGHTS = [
   },
   {
     title: 'Transparent craftsmanship',
-    copy: 'You get clear lead times, progress photos, and a step-by-step build diary so you know exactly what you are commissioning.'
+    copy: 'You get clear lead times, progress photos (upon request), and a step-by-step build diary so you know exactly what you are commissioning.'
   },
 ]
 
