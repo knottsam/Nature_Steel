@@ -22,6 +22,74 @@ function readEnvSquareConfig() {
   return { applicationId, locationId, environment }
 }
 
+const SQUARE_SCRIPT_URL = {
+  production: 'https://web.squarecdn.com/v1/square.js',
+  sandbox: 'https://sandbox.web.squarecdn.com/v1/square.js',
+}
+
+const squareSdkPromises = {}
+
+function ensureSquareSdk(environment = 'sandbox') {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return Promise.resolve(null)
+  }
+  const normalized = environment === 'production' ? 'production' : 'sandbox'
+  if (window.Square && window.__NS_SQUARE_ENV === normalized) {
+    return Promise.resolve(window.Square)
+  }
+  if (squareSdkPromises[normalized]) {
+    return squareSdkPromises[normalized]
+  }
+  squareSdkPromises[normalized] = new Promise((resolve, reject) => {
+    try {
+      const existingScripts = Array.from(document.querySelectorAll('script[data-square-sdk]'))
+      existingScripts.forEach(script => {
+        if (script.dataset.squareSdk !== normalized) {
+          script.remove()
+        }
+      })
+
+      if (window.__NS_SQUARE_ENV && window.__NS_SQUARE_ENV !== normalized) {
+        delete window.Square
+        window.__NS_SQUARE_ENV = undefined
+      }
+
+      const existing = document.querySelector(`script[data-square-sdk="${normalized}"]`)
+      if (existing && window.Square) {
+        window.__NS_SQUARE_ENV = normalized
+        resolve(window.Square)
+        return
+      }
+
+      const script = document.createElement('script')
+      script.src = SQUARE_SCRIPT_URL[normalized] || SQUARE_SCRIPT_URL.sandbox
+      script.async = true
+      script.dataset.squareSdk = normalized
+      script.onload = () => {
+        if (window.Square) {
+          window.__NS_SQUARE_ENV = normalized
+          resolve(window.Square)
+        } else {
+          script.remove()
+          reject(new Error('Square SDK loaded but window.Square missing'))
+        }
+      }
+      script.onerror = () => {
+        script.remove()
+        reject(new Error('Failed to load Square SDK'))
+      }
+      document.head.appendChild(script)
+    } catch (err) {
+      reject(err)
+    }
+  }).catch(err => {
+    delete squareSdkPromises[normalized]
+    throw err
+  })
+
+  return squareSdkPromises[normalized]
+}
+
 export default function Checkout() {
   const { items, subtotal } = useCart()
   const [placed, setPlaced] = useState(false)
@@ -79,7 +147,7 @@ export default function Checkout() {
         <pre style={{background:'#f6f8fa', padding:12, borderRadius:6}}>
 {`VITE_SQUARE_APPLICATION_ID=...
 VITE_SQUARE_LOCATION_ID=...
-VITE_SQUARE_ENVIRONMENT=sandbox
+VITE_SQUARE_ENVIRONMENT=production
 
 firebase functions:secrets:set SQUARE_APPLICATION_ID
 firebase functions:secrets:set SQUARE_LOCATION_ID
@@ -122,16 +190,11 @@ function CheckoutForm({ items, subtotal, onPlaced, squareConfig }) {
   const cardInstanceRef = useRef(null)
   const applicationId = squareConfig?.applicationId || ''
   const locationId = squareConfig?.locationId || ''
+  const environment = squareConfig?.environment === 'production' ? 'production' : 'sandbox'
 
-  // Initialize Square Web Payments SDK - only once
+  // Initialize Square Web Payments SDK - only once per config
   useEffect(() => {
     if (!applicationId || !locationId) {
-      return
-    }
-    console.log('[checkout] useEffect running, cardInstanceRef:', cardInstanceRef.current)
-    // Prevent double initialization (React StrictMode/dev or fast refresh)
-    if (cardInstanceRef.current || (typeof window !== 'undefined' && window.__NS_SQUARE_CARD_MOUNTED)) {
-      console.log('[checkout] Card already initialized, skipping')
       return
     }
 
@@ -139,22 +202,38 @@ function CheckoutForm({ items, subtotal, onPlaced, squareConfig }) {
     let localCardInstance = null
 
     async function initSquare() {
-      console.log('[checkout] initSquare called')
+      console.log('[checkout] initSquare called', { environment, hasCard: Boolean(cardInstanceRef.current) })
+
+      try {
+        await ensureSquareSdk(environment)
+      } catch (sdkErr) {
+        console.error('[checkout] Failed to load Square SDK', sdkErr)
+        if (mounted) setError('Payment system failed to load. Please refresh the page.')
+        return
+      }
+
+      if (!mounted) return
+
+      // Prevent double initialization (React StrictMode/dev or fast refresh)
+      if (cardInstanceRef.current || (typeof window !== 'undefined' && window.__NS_SQUARE_CARD_MOUNTED)) {
+        console.log('[checkout] Card already initialized, skipping')
+        return
+      }
+
       if (!window.Square) {
-        console.error('[checkout] Square.js failed to load')
+        console.error('[checkout] Square SDK unavailable after load')
         if (mounted) setError('Payment system failed to load. Please refresh the page.')
         return
       }
 
       console.log('[checkout] Square SDK loaded, initializing...')
       try {
-  const paymentsInstance = window.Square.payments(applicationId, locationId)
+        const paymentsInstance = window.Square.payments(applicationId, locationId)
         console.log('[checkout] Payments instance created:', paymentsInstance)
-        
+
         const cardInstance = await paymentsInstance.card()
         console.log('[checkout] Card instance created:', cardInstance)
-        
-        // If the container already has children, clear it before attaching
+
         const container = document.getElementById('card-container')
         if (container && container.childElementCount > 0) {
           container.innerHTML = ''
@@ -162,14 +241,13 @@ function CheckoutForm({ items, subtotal, onPlaced, squareConfig }) {
 
         await cardInstance.attach('#card-container')
         console.log('[checkout] Card attached to container')
-        
-        // Store in ref to prevent re-initialization
+
         cardInstanceRef.current = cardInstance
         localCardInstance = cardInstance
         if (typeof window !== 'undefined') {
           window.__NS_SQUARE_CARD_MOUNTED = true
         }
-        
+
         if (mounted) {
           setPayments(paymentsInstance)
           setCard(cardInstance)
@@ -187,7 +265,6 @@ function CheckoutForm({ items, subtotal, onPlaced, squareConfig }) {
       console.log('[checkout] Cleanup running')
       mounted = false
       try {
-        // Prefer local instance; fallback to ref
         const inst = localCardInstance || cardInstanceRef.current
         if (inst && typeof inst.destroy === 'function') {
           inst.destroy()
@@ -204,7 +281,7 @@ function CheckoutForm({ items, subtotal, onPlaced, squareConfig }) {
       }
       cardInstanceRef.current = null
     }
-  }, [applicationId, locationId])
+  }, [applicationId, locationId, environment])
 
   async function onSubmit(e) {
     e.preventDefault()

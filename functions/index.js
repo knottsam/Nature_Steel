@@ -37,6 +37,7 @@ const squareAccessToken = defineSecret("SQUARE_ACCESS_TOKEN");
 const squareApplicationId = defineSecret("SQUARE_APPLICATION_ID");
 const squareLocationId = defineSecret("SQUARE_LOCATION_ID");
 const squareEnvironment = defineSecret("SQUARE_ENVIRONMENT");
+const squareWebhookSecret = defineSecret("SQUARE_WEBHOOK_SECRET");
 
 function readSecret(secret, envKey) {
   try {
@@ -48,7 +49,7 @@ function readSecret(secret, envKey) {
   } catch {
     const fromEnv = envKey ? process.env[envKey] : undefined;
     return fromEnv ? String(fromEnv).trim() : "";
-  }
+}
 }
 
 function getSquarePublicConfig() {
@@ -59,7 +60,9 @@ function getSquarePublicConfig() {
   return {applicationId, locationId, environment};
 }
 
-exports.getSquarePublicConfig = onCall({secrets: [squareApplicationId, squareLocationId, squareEnvironment]}, async (request) => {
+exports.getSquarePublicConfig = onCall({
+  secrets: [squareApplicationId, squareLocationId, squareEnvironment],
+}, async (request) => {
   try {
     assertAppCheck(request);
     const cfg = getSquarePublicConfig();
@@ -420,6 +423,7 @@ exports.processSquarePayment = onCall({secrets: [squareAccessToken]}, async (req
 // Square webhook to handle payment events
 exports.squareWebhook = onRequest({
   cors: true,
+  secrets: [squareWebhookSecret],
 }, async (req, res) => {
   if (req.method !== "POST") {
     res.status(200).send("ok");
@@ -427,7 +431,7 @@ exports.squareWebhook = onRequest({
   }
 
   try {
-    const whSecret = process.env.SQUARE_WEBHOOK_SECRET;
+  const whSecret = readSecret(squareWebhookSecret, "SQUARE_WEBHOOK_SECRET");
 
     if (!whSecret) {
       console.error("[squareWebhook] Missing SQUARE_WEBHOOK_SECRET");
@@ -436,16 +440,83 @@ exports.squareWebhook = onRequest({
     }
 
     // Verify webhook signature (required when secret is set)
-    const signature = req.headers["x-square-hmacsha256-signature"];
-    const url = req.headers["x-square-requesturl"] || "";
-    const body = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
+    const signatureHeader = req.headers["x-square-hmacsha256-signature"];
+    if (!signatureHeader) {
+      console.error("[squareWebhook] Missing signature header");
+      res.status(400).send("Missing signature");
+      return;
+    }
+    const urlHeader = req.headers["x-square-request-url"];
+    const signatureVersion = String(req.headers["x-square-signature-version"] || "1");
+    const sentAt = req.headers["x-square-sent-at"] || "";
+    const forwardedProto = req.get("x-forwarded-proto");
+    const protocol = (typeof forwardedProto === "string" && forwardedProto.trim() !== "") ?
+      forwardedProto.split(",")[0].trim() :
+      (req.protocol || "https");
+    const pathFromRequest =
+      (typeof req.originalUrl === "string" && req.originalUrl.length > 0) ? req.originalUrl :
+      (typeof req.url === "string" && req.url.length > 0) ? req.url :
+      (typeof req.path === "string" && req.path.length > 0) ? req.path :
+      "/";
+    const fallbackPath = process.env.SQUARE_WEBHOOK_PATH || "/squareWebhook";
+    const normalizedPath = (typeof pathFromRequest === "string" && pathFromRequest !== "/") ?
+      pathFromRequest :
+      fallbackPath;
+    const requestUrl = (typeof urlHeader === "string" && urlHeader.trim() !== "") ?
+      urlHeader.trim() :
+      `${protocol}://${req.get("host")}${normalizedPath}`;
+
+    let bodyBuffer;
+    if (req.rawBody != null) {
+      if (Buffer.isBuffer(req.rawBody)) {
+        bodyBuffer = req.rawBody;
+      } else if (req.rawBody instanceof Uint8Array) {
+        bodyBuffer = Buffer.from(req.rawBody);
+      } else if (typeof req.rawBody === "string") {
+        bodyBuffer = Buffer.from(req.rawBody, "utf8");
+      }
+    }
+    if (!bodyBuffer) {
+      const fallback = req.body != null ? JSON.stringify(req.body) : "";
+      bodyBuffer = Buffer.from(fallback, "utf8");
+    }
+    const bodyString = bodyBuffer.toString("utf8");
 
     const hmac = crypto.createHmac("sha256", whSecret);
-    hmac.update(url + body.toString());
-    const hash = hmac.digest("base64");
+    const payloadToSign = (signatureVersion === "2" && sentAt) ?
+      `${sentAt}${requestUrl}${bodyString}` :
+      `${requestUrl}${bodyString}`;
+    hmac.update(payloadToSign);
+    const expectedSignature = hmac.digest("base64");
 
-    if (signature !== hash) {
-      console.error("[squareWebhook] Invalid signature");
+    let providedBuffer;
+    let expectedBuffer;
+    try {
+      providedBuffer = Buffer.from(signatureHeader, "base64");
+      expectedBuffer = Buffer.from(expectedSignature, "base64");
+    } catch (convertErr) {
+      console.error("[squareWebhook] Failed to decode signatures", convertErr);
+      res.status(400).send("Invalid signature encoding");
+      return;
+    }
+
+    const signaturesMatch =
+      providedBuffer.length === expectedBuffer.length &&
+      crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+
+    if (!signaturesMatch) {
+      console.error("[squareWebhook] Invalid signature", {
+        signatureHeader: signatureHeader.slice(0, 8),
+        expectedPreview: expectedSignature.slice(0, 8),
+        requestUrl,
+        signatureVersion,
+        sentAtPreview: sentAt.slice(0, 8),
+        urlHeaderPreview: typeof urlHeader === "string" ? urlHeader.slice(0, 32) : null,
+        derivedPath: pathFromRequest,
+        normalizedPath,
+        rawBodyType: req.rawBody ? Object.prototype.toString.call(req.rawBody) : null,
+        rawBodyIsBuffer: Boolean(req.rawBody && Buffer.isBuffer(req.rawBody)),
+      });
       res.status(400).send("Invalid signature");
       return;
     }

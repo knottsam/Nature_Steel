@@ -14,8 +14,8 @@ export default function NavBar() {
         <div className="nav-links">
           <NavLink to="/shop">Shop</NavLink>
           {showArtistsLink && <NavLink to="/artists">Artists</NavLink>}
-          <NavLink to="/faq">FAQ</NavLink>
           <NavLink to="/about">About</NavLink>
+          <NavLink to="/faq">FAQ</NavLink>
           <NavLink to="/contact">Contact</NavLink>
           <NavLink to="/admin">Admin</NavLink>
         </div>

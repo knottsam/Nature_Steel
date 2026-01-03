@@ -240,7 +240,6 @@ export default function Home() {
                   ...cardStyles,
                 }}
                 onFocus={() => setActive(index)}
-                onMouseEnter={() => setActive(index)}
                 onTouchStart={() => setActive(index)}
               >
                 <img src={p.images[0]} alt={p.name} />
@@ -300,17 +299,6 @@ export default function Home() {
           </div>
         </section>
       </div>
-
-      <section className="card">
-        <h2 className="h2">How it works</h2>
-        <ol>
-          <li>Pick your bespoke piece</li>
-          <li>Checkout and we start building</li>
-          <li>When we've made it, we ship to you</li>
-          <li>You enjoy your unique piece</li>
-        </ol>
-        <p className="muted">Custom orders may add extra lead time. See <Link to="/faq">FAQ</Link> for details.</p>
-      </section>
     </div>
     </div>
   )
