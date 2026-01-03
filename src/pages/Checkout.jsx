@@ -1,30 +1,96 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCart } from '../context/CartContext.jsx'
 import { formatPrice } from '../utils/currency.js'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '../firebase'
 
-const squareApplicationId = import.meta.env.VITE_SQUARE_APPLICATION_ID
-const squareLocationId = import.meta.env.VITE_SQUARE_LOCATION_ID
-const squareEnvironment = import.meta.env.VITE_SQUARE_ENVIRONMENT || 'sandbox'
+function readEnvSquareConfig() {
+  const rawAppId = import.meta.env?.VITE_SQUARE_APPLICATION_ID
+  const rawLocationId = import.meta.env?.VITE_SQUARE_LOCATION_ID
+  const rawEnvironment = import.meta.env?.VITE_SQUARE_ENVIRONMENT
+
+  const applicationId = typeof rawAppId === 'string' ? rawAppId.trim() : ''
+  const locationId = typeof rawLocationId === 'string' ? rawLocationId.trim() : ''
+  const environment = (typeof rawEnvironment === 'string' ? rawEnvironment.trim().toLowerCase() : 'sandbox') === 'production'
+    ? 'production'
+    : 'sandbox'
+
+  if (!applicationId || !locationId) {
+    return null
+  }
+
+  return { applicationId, locationId, environment }
+}
 
 export default function Checkout() {
   const { items, subtotal } = useCart()
   const [placed, setPlaced] = useState(false)
+  const envSquareConfig = useMemo(() => readEnvSquareConfig(), [])
+  const [squareConfig, setSquareConfig] = useState(envSquareConfig)
+  const [configLoading, setConfigLoading] = useState(!envSquareConfig)
+  const [configError, setConfigError] = useState('')
 
-  if (!squareApplicationId || !squareLocationId) {
+  const fetchSquareConfig = useCallback(async () => {
+    setConfigError('')
+    setConfigLoading(true)
+    try {
+      const callable = httpsCallable(functions, 'getSquarePublicConfig')
+      const response = await callable()
+      const data = response?.data || response
+      const appId = typeof data?.applicationId === 'string' ? data.applicationId.trim() : ''
+      const locationId = typeof data?.locationId === 'string' ? data.locationId.trim() : ''
+      if (!appId || !locationId) {
+        throw new Error('Incomplete Square configuration returned from server.')
+      }
+      const environment = data?.environment === 'production' ? 'production' : 'sandbox'
+      setSquareConfig({ applicationId: appId, locationId, environment })
+    } catch (err) {
+      console.error('[checkout] Failed to load Square configuration', err)
+      setConfigError(err?.message || 'Unable to load payment configuration.')
+    } finally {
+      setConfigLoading(false)
+    }
+  }, [functions, setConfigError, setConfigLoading, setSquareConfig])
+
+  useEffect(() => {
+    if (squareConfig) {
+      setConfigLoading(false)
+      return
+    }
+    fetchSquareConfig()
+  }, [squareConfig, fetchSquareConfig])
+
+  if (configLoading) {
+    return (
+      <div className="card">
+        <h2>Preparing checkout…</h2>
+        <p className="muted">Loading payment gateway configuration.</p>
+      </div>
+    )
+  }
+
+  if (!squareConfig) {
     return (
       <div className="card">
         <h2>Square not configured</h2>
         <p>
-          Add your Square credentials in <code>.env.local</code> at the project root:
+          Provide your Square credentials either as Vite env vars before building or as Firebase Functions secrets:
         </p>
         <pre style={{background:'#f6f8fa', padding:12, borderRadius:6}}>
-{`VITE_SQUARE_APPLICATION_ID=sandbox-sq0idb-XXXXXXXXXXXXXXXXXXXXXXXX
-VITE_SQUARE_LOCATION_ID=XXXXXXXXXXXXX
-VITE_SQUARE_ENVIRONMENT=sandbox`}
+{`VITE_SQUARE_APPLICATION_ID=...
+VITE_SQUARE_LOCATION_ID=...
+VITE_SQUARE_ENVIRONMENT=sandbox
+
+firebase functions:secrets:set SQUARE_APPLICATION_ID
+firebase functions:secrets:set SQUARE_LOCATION_ID
+firebase functions:secrets:set SQUARE_ENVIRONMENT`}
         </pre>
-        <p>Then restart the dev server.</p>
+        {configError ? <p style={{ color: 'crimson' }}>{configError}</p> : <p>After updating, redeploy and restart the site.</p>}
+        {!configLoading && (
+          <button type="button" className="btn" onClick={fetchSquareConfig} style={{ marginTop: '0.75rem' }}>
+            Retry loading configuration
+          </button>
+        )}
       </div>
     )
   }
@@ -38,10 +104,10 @@ VITE_SQUARE_ENVIRONMENT=sandbox`}
     )
   }
 
-  return <CheckoutForm items={items} subtotal={subtotal} onPlaced={() => setPlaced(true)} />
+  return <CheckoutForm items={items} subtotal={subtotal} onPlaced={() => setPlaced(true)} squareConfig={squareConfig} />
 }
 
-function CheckoutForm({ items, subtotal, onPlaced }) {
+function CheckoutForm({ items, subtotal, onPlaced, squareConfig }) {
   const { clearCart } = useCart()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -54,9 +120,14 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
   const [card, setCard] = useState(null)
   const [payments, setPayments] = useState(null)
   const cardInstanceRef = useRef(null)
+  const applicationId = squareConfig?.applicationId || ''
+  const locationId = squareConfig?.locationId || ''
 
   // Initialize Square Web Payments SDK - only once
   useEffect(() => {
+    if (!applicationId || !locationId) {
+      return
+    }
     console.log('[checkout] useEffect running, cardInstanceRef:', cardInstanceRef.current)
     // Prevent double initialization (React StrictMode/dev or fast refresh)
     if (cardInstanceRef.current || (typeof window !== 'undefined' && window.__NS_SQUARE_CARD_MOUNTED)) {
@@ -77,7 +148,7 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
 
       console.log('[checkout] Square SDK loaded, initializing...')
       try {
-        const paymentsInstance = window.Square.payments(squareApplicationId, squareLocationId)
+  const paymentsInstance = window.Square.payments(applicationId, locationId)
         console.log('[checkout] Payments instance created:', paymentsInstance)
         
         const cardInstance = await paymentsInstance.card()
@@ -133,7 +204,7 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
       }
       cardInstanceRef.current = null
     }
-  }, []) // Empty dependency array - run only once
+  }, [applicationId, locationId])
 
   async function onSubmit(e) {
     e.preventDefault()
@@ -143,6 +214,11 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
     
     if (!card || !payments) {
       setError('Payment form not ready. Please wait or refresh the page.')
+      return
+    }
+
+    if (!locationId) {
+      setError('Payment configuration missing. Please refresh the page.')
       return
     }
 
@@ -159,10 +235,10 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
       const itemsSummary = items.map(i => `${i.product?.name || 'Item'}×${i.qty}`).join(', ').slice(0, 450)
       const itemsJson = JSON.stringify(items.map(i => ({ productId: i.product?.id || i.productId, qty: i.qty }))).slice(0, 450)
       
-      const prepareRes = await createPayment({ 
-        amount: subtotal, 
+      const prepareRes = await createPayment({
+        amount: subtotal,
         currency: 'gbp',
-        locationId: squareLocationId,
+        locationId,
         itemsSummary, 
         itemsJson, 
         userEmail: email, 
@@ -189,7 +265,7 @@ function CheckoutForm({ items, subtotal, onPlaced }) {
           sourceId: tokenResult.token,
           amount: subtotal,
           currency: 'GBP',
-          locationId: squareLocationId,
+          locationId,
           itemsSummary,
           itemsJson,
           userEmail: email,

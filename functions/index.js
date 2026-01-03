@@ -34,6 +34,52 @@ try {
 } catch {}
 
 const squareAccessToken = defineSecret("SQUARE_ACCESS_TOKEN");
+const squareApplicationId = defineSecret("SQUARE_APPLICATION_ID");
+const squareLocationId = defineSecret("SQUARE_LOCATION_ID");
+const squareEnvironment = defineSecret("SQUARE_ENVIRONMENT");
+
+function readSecret(secret, envKey) {
+  try {
+    const fromSecret = (typeof secret.value === "function") ? secret.value() : undefined;
+    const fromEnv = envKey ? process.env[envKey] : undefined;
+    const raw = (fromSecret != null && String(fromSecret).trim() !== "") ? fromSecret : fromEnv;
+    if (!raw) return "";
+    return String(raw).trim().replace(/^"+|"+$/g, "");
+  } catch {
+    const fromEnv = envKey ? process.env[envKey] : undefined;
+    return fromEnv ? String(fromEnv).trim() : "";
+  }
+}
+
+function getSquarePublicConfig() {
+  const applicationId = readSecret(squareApplicationId, "SQUARE_APPLICATION_ID");
+  const locationId = readSecret(squareLocationId, "SQUARE_LOCATION_ID");
+  const environmentRaw = readSecret(squareEnvironment, "SQUARE_ENVIRONMENT") || "sandbox";
+  const environment = environmentRaw.toLowerCase() === "production" ? "production" : "sandbox";
+  return {applicationId, locationId, environment};
+}
+
+exports.getSquarePublicConfig = onCall({secrets: [squareApplicationId, squareLocationId, squareEnvironment]}, async (request) => {
+  try {
+    assertAppCheck(request);
+    const cfg = getSquarePublicConfig();
+    if (!cfg.applicationId || !cfg.locationId) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Square configuration missing",
+          {
+            hasApplicationId: Boolean(cfg.applicationId),
+            hasLocationId: Boolean(cfg.locationId),
+            hint: "Set SQUARE_APPLICATION_ID, SQUARE_LOCATION_ID, and SQUARE_ENVIRONMENT secrets or env vars.",
+          },
+      );
+    }
+    return cfg;
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", "Failed to load Square configuration", {message: err && err.message});
+  }
+});
 
 // Enforce App Check for callable functions (skipped on emulator)
 function assertAppCheck(request) {
