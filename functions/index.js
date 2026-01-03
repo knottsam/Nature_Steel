@@ -10,6 +10,18 @@ const {initializeApp, getApps} = require("firebase-admin/app");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 let adminInitialized = false;
 
+const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
+// Prefer env var; fall back to functions config for backward compatibility
+const REQUIRE_APP_CHECK = process.env.REQUIRE_APP_CHECK === "1" ||
+  (process.env.FIREBASE_CONFIG && (() => {
+    try {
+      const cfg = JSON.parse(process.env.FIREBASE_CONFIG);
+      return cfg?.security?.require_app_check === "1";
+    } catch (e) {
+      return false;
+    }
+  })());
+
 // Load local env for emulator: prefer .env.local then .env
 try {
   const envLocal = path.join(__dirname, ".env.local");
@@ -22,6 +34,17 @@ try {
 } catch {}
 
 const squareAccessToken = defineSecret("SQUARE_ACCESS_TOKEN");
+
+// Enforce App Check for callable functions (skipped on emulator)
+function assertAppCheck(request) {
+  if (IS_EMULATOR || !REQUIRE_APP_CHECK) return;
+  if (!request.app) {
+    throw new HttpsError(
+        "failed-precondition",
+        "App Check token is required. Please refresh the page and try again.",
+    );
+  }
+}
 
 // Safely obtain and sanitize the Square access token (trim whitespace/quotes)
 function getSquareAccessToken() {
@@ -41,6 +64,7 @@ function getSquareAccessToken() {
 
 exports.createPayment = onCall({secrets: [squareAccessToken]}, async (request) => {
   try {
+    assertAppCheck(request);
     // Validate Square access token
     const accessToken = getSquareAccessToken();
     if (!accessToken) {
@@ -197,6 +221,7 @@ function initAdmin() {
 // Process Square payment after client tokenizes the card
 exports.processSquarePayment = onCall({secrets: [squareAccessToken]}, async (request) => {
   try {
+    assertAppCheck(request);
     // Initialize Square client
   const accessToken = getSquareAccessToken();
     if (!accessToken) {
@@ -217,6 +242,18 @@ exports.processSquarePayment = onCall({secrets: [squareAccessToken]}, async (req
           "invalid-argument",
           "Missing required payment parameters",
       );
+    }
+
+    if (!Number.isInteger(amount) || amount <= 0) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Invalid amount",
+          {details: "Amount must be a positive integer in minor units (e.g., pence)."},
+      );
+    }
+
+    if (currency && typeof currency !== "string") {
+      throw new HttpsError("invalid-argument", "Currency must be a string");
     }
 
     // Create the payment
@@ -335,35 +372,36 @@ exports.processSquarePayment = onCall({secrets: [squareAccessToken]}, async (req
 });
 
 // Square webhook to handle payment events
-exports.squareWebhook = onRequest(async (req, res) => {
+exports.squareWebhook = onRequest({
+  cors: true,
+}, async (req, res) => {
   if (req.method !== "POST") {
     res.status(200).send("ok");
     return;
   }
 
   try {
-    // Note: Webhook signature verification is optional for sandbox testing
-    // In production, configure SQUARE_WEBHOOK_SECRET for security
     const whSecret = process.env.SQUARE_WEBHOOK_SECRET;
 
-    // Verify webhook signature if configured
-    if (whSecret) {
-      const signature = req.headers["x-square-hmacsha256-signature"];
-      const url = req.headers["x-square-requesturl"] || "";
-      const body = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
+    if (!whSecret) {
+      console.error("[squareWebhook] Missing SQUARE_WEBHOOK_SECRET");
+      res.status(400).send("Webhook secret not configured");
+      return;
+    }
 
-      const hmac = crypto.createHmac("sha256", whSecret);
-      hmac.update(url + body.toString());
-      const hash = hmac.digest("base64");
+    // Verify webhook signature (required when secret is set)
+    const signature = req.headers["x-square-hmacsha256-signature"];
+    const url = req.headers["x-square-requesturl"] || "";
+    const body = req.rawBody || Buffer.from(JSON.stringify(req.body || {}));
 
-      if (signature !== hash) {
-        console.error("[squareWebhook] Invalid signature");
-        res.status(400).send("Invalid signature");
-        return;
-      }
-    } else {
-      console.warn("[squareWebhook] No webhook secret configured - " +
-          "signature verification disabled");
+    const hmac = crypto.createHmac("sha256", whSecret);
+    hmac.update(url + body.toString());
+    const hash = hmac.digest("base64");
+
+    if (signature !== hash) {
+      console.error("[squareWebhook] Invalid signature");
+      res.status(400).send("Invalid signature");
+      return;
     }
 
     const event = req.body;
@@ -419,8 +457,9 @@ exports.squareWebhook = onRequest(async (req, res) => {
 });
 
 // Diagnostics: list merchant and locations using current Square access token
-exports.squareDiagnostics = onCall({secrets: [squareAccessToken]}, async () => {
+exports.squareDiagnostics = onCall({secrets: [squareAccessToken]}, async (request) => {
   try {
+    assertAppCheck(request);
     const secretCandidate = (typeof squareAccessToken.value === "function") ? squareAccessToken.value() : undefined;
     const fromEnv = !(secretCandidate && String(secretCandidate).trim() !== "");
     const accessToken = getSquareAccessToken();

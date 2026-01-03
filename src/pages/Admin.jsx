@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { db, storage } from '../firebase';
-import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc, updateDoc, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc, updateDoc, setDoc, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
+import { useSiteConfig } from '../context/SiteConfigContext.jsx';
+import { DEFAULT_SITE_VISIBILITY, SITE_VISIBILITY_DOC } from '../config/siteVisibility.js';
 
 const ALLOWED_ADMINS = [
   'knott.mail8@gmail.com',
@@ -35,6 +37,13 @@ export default function Admin() {
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState('');
+  const { config: siteConfig, loading: siteConfigLoading } = useSiteConfig();
+  const [toggleMessage, setToggleMessage] = useState('');
+  const [toggleError, setToggleError] = useState('');
+  const [toggleLoading, setToggleLoading] = useState({
+    artistsEnabled: false,
+    artistPagesEnabled: false,
+  });
 
   React.useEffect(() => {
     const auth = getAuth();
@@ -247,6 +256,42 @@ export default function Admin() {
     }
   };
 
+  const updateVisibilityFlag = async (field, nextValue) => {
+    try {
+      await updateDoc(SITE_VISIBILITY_DOC, { [field]: nextValue });
+    } catch (err) {
+      if (err?.code === 'not-found') {
+        await setDoc(
+          SITE_VISIBILITY_DOC,
+          {
+            ...DEFAULT_SITE_VISIBILITY,
+            [field]: nextValue,
+          },
+          { merge: true },
+        )
+      } else {
+        throw err
+      }
+    }
+  }
+
+  const handleVisibilityToggle = async (field) => {
+    setToggleError('')
+    setToggleMessage('')
+    setToggleLoading(prev => ({ ...prev, [field]: true }))
+    const currentValue = siteConfig?.[field]
+    const nextValue = currentValue === undefined ? DEFAULT_SITE_VISIBILITY[field] : !currentValue
+    try {
+      await updateVisibilityFlag(field, nextValue)
+      const label = field === 'artistsEnabled' ? 'Artists directory' : 'Artist profile pages'
+      setToggleMessage(`${label} ${nextValue ? 'enabled' : 'disabled'}.`)
+    } catch (err) {
+      setToggleError('Visibility update failed: ' + (err?.message || err?.code || 'unknown error'))
+    } finally {
+      setToggleLoading(prev => ({ ...prev, [field]: false }))
+    }
+  }
+
   // Restrict access to allowed admins only
   if (user && !ALLOWED_ADMINS.includes(user.email)) {
     return (
@@ -317,6 +362,37 @@ export default function Admin() {
             If you can't see items or save changes, add this UID to Firestore/Storage rules or use an admins collection.
           </div>
         </div>
+        <section className="card" style={{ marginBottom: 16 }}>
+          <h3 className="h3">Site visibility controls</h3>
+          <p className="muted" style={{ marginTop: 0 }}>Toggle the artists directory and artist profiles without redeploying.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {['artistsEnabled', 'artistPagesEnabled'].map((flag) => {
+              const label = flag === 'artistsEnabled' ? 'Artists directory' : 'Artist profile pages'
+              const enabled = siteConfig?.[flag] ?? DEFAULT_SITE_VISIBILITY[flag]
+              const loadingFlag = toggleLoading[flag]
+              return (
+                <button
+                  key={flag}
+                  type="button"
+                  onClick={() => handleVisibilityToggle(flag)}
+                  disabled={siteConfigLoading || loadingFlag}
+                  className="btn"
+                  style={{
+                    alignSelf: 'flex-start',
+                    opacity: siteConfigLoading ? 0.6 : 1,
+                    pointerEvents: siteConfigLoading ? 'none' : undefined,
+                  }}
+                >
+                  {loadingFlag
+                    ? 'Updating…'
+                    : `${enabled ? 'Hide' : 'Show'} ${label}`}
+                </button>
+              )
+            })}
+          </div>
+          {toggleMessage && <p className="muted" style={{ marginTop: 10 }}>{toggleMessage}</p>}
+          {toggleError && <p style={{ color: '#dc2626', marginTop: 4 }}>{toggleError}</p>}
+        </section>
         <form onSubmit={handleSubmit}>
           <input
             type="text"

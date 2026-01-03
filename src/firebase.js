@@ -1,6 +1,7 @@
 // src/firebase.js
 // Replace the below config object with your own Firebase project config
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
@@ -40,6 +41,20 @@ if (!configHealth.ok) {
 }
 
 export const app = initializeApp(firebaseConfig);
+// Optional App Check: requires VITE_FIREBASE_APPCHECK_KEY (reCAPTCHA v3 site key)
+const appCheckKey = import.meta.env.VITE_FIREBASE_APPCHECK_KEY;
+if (appCheckKey) {
+  // Allow a debug token in local dev for easier testing
+  if (import.meta.env.FIREBASE_APPCHECK_DEBUG_TOKEN) {
+    // eslint-disable-next-line no-undef
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.FIREBASE_APPCHECK_DEBUG_TOKEN;
+  }
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(appCheckKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
+
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 // Prefer a custom Functions domain if provided (great when Firebase web config isn't set locally)

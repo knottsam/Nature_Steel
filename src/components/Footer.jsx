@@ -8,7 +8,7 @@ export default function Footer() {
         <div className="grid grid-4">
           <div>
             <div className="kicker">Nature & Steel Bespoke</div>
-            <p className="muted">Handcrafted pieces. Customizable pieces, made to order.</p>
+            <p className="muted">Handcrafted pieces, made to order.</p>
           </div>
           <div>
             <div className="h3">Explore</div>
@@ -27,7 +27,7 @@ export default function Footer() {
           </div>
           <div>
             <div className="h3">Newsletter</div>
-            <p className="muted">Get product drops and artist collabs.</p>
+            <p className="muted">Get product drops and new artist collabs.</p>
             <form onSubmit={(e)=>e.preventDefault()}>
               <input placeholder="you@email.com" />
             </form>

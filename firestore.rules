@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email in [
+        'knott.mail8@gmail.com',
+        'natureandsteelbespoke@gmail.com'
+      ];
+    }
+
+    function isValidFurniture() {
+      return request.resource.data.keys().hasOnly([
+        'name', 'description', 'price', 'images', 'materials', 'craftsmanship',
+        'customizable', 'published', 'stock', 'created'
+      ])
+      && request.resource.data.name is string
+      && request.resource.data.description is string
+      && request.resource.data.materials is string
+      && request.resource.data.craftsmanship is string
+      && request.resource.data.price is int
+      && request.resource.data.price >= 0
+      && (!('stock' in request.resource.data) || request.resource.data.stock is int)
+      && (!('customizable' in request.resource.data) || request.resource.data.customizable is bool)
+      && (!('published' in request.resource.data) || request.resource.data.published is bool);
+    }
+
+    match /furniture/{docId} {
+      allow read: if (resource != null && resource.data.published == true) || isAdmin();
+      allow create, update: if isAdmin() && isValidFurniture();
+      allow delete: if isAdmin();
+    }
+
+    match /orders/{docId} {
+      // Orders are written by the backend (Admin SDK) and read only by admins
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /settings/siteVisibility {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Deny everything else by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

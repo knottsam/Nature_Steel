@@ -15,6 +15,7 @@ import Contact from './pages/Contact.jsx'
 import Cart from './pages/Cart.jsx'
 import Checkout from './pages/Checkout.jsx'
 import Admin from './pages/Admin.jsx'
+import { SiteConfigProvider } from './context/SiteConfigContext.jsx'
 
 const router = createBrowserRouter([
   {
@@ -37,7 +38,9 @@ const router = createBrowserRouter([
 ])
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <RouterProvider router={router} />
-  </React.StrictMode>,
+    <React.StrictMode>
+      <SiteConfigProvider>
+        <RouterProvider router={router} />
+      </SiteConfigProvider>
+    </React.StrictMode>,
 )

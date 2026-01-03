@@ -1,9 +1,19 @@
 import React, { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { artists } from '../data/artists.js'
+import { useSiteConfig } from '../context/SiteConfigContext.jsx'
 
 export default function Artist() {
   const { slug } = useParams()
+  const { config, loading } = useSiteConfig()
+  if (!loading && !config?.artistPagesEnabled) {
+    return (
+      <section className="card" style={{ maxWidth: 650, margin: '0 auto' }}>
+        <h1 className="h1">Artist profile</h1>
+        <p className="muted">Artist profiles are temporarily unavailable. Please visit the shop for current pieces.</p>
+      </section>
+    )
+  }
   const artist = artists.find(skeg => skeg.slug === slug)
   const [currentSlide, setCurrentSlide] = useState(0)
   

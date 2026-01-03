@@ -16,7 +16,7 @@
   "dependencies": {
     "dotenv": "^16.4.5",
     "firebase-admin": "^12.6.0",
-    "firebase-functions": "^6.0.1",
+  "firebase-functions": "^6.2.0",
     "graff-furniture-vite": "file:..",
     "square": "^43.2.0",
     "stripe": "^18.5.0"
