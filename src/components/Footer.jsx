@@ -8,7 +8,7 @@ export default function Footer() {
         <div className="grid grid-4">
           <div>
             <div className="kicker">Nature & Steel Bespoke</div>
-            <p className="muted">Handcrafted furniture meets street art. Customizable pieces, made to order.</p>
+            <p className="muted">Handcrafted pieces. Customizable pieces, made to order.</p>
           </div>
           <div>
             <div className="h3">Explore</div>

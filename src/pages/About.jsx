@@ -5,8 +5,8 @@ export default function About() {
     <div>
       <h1 className="h1">About</h1>
       <p>
-  At Nature & Steel Bespoke, we build durable, timeless furniture in small batches — then collaborate with artists to create unique pieces.
-        one-of-one statement pieces of furniture. Our mission: elevate street art into everyday living spaces.
+  At Nature & Steel Bespoke, we build durable, timeless furniture, creating unique pieces.
+        One-of-one statement pieces of furniture. Our mission: elevate everyday living spaces.
       </p>
     </div>
   )

@@ -62,7 +62,7 @@ export default function Shop() {
   return (
     <div>
       <h1 className="h1">Nature & Steel Bespoke Collection</h1>
-      <p className="muted">Fine core pieces. Built to order. Add bespoke art customization if you want it.</p>
+      <p className="muted">Fine core pieces. Built to order. Choose customization if you want it.</p>
       <div className="spacer" />
       {loading ? (
         <div>Loading...</div>
