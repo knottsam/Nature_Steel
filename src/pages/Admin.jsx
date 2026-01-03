@@ -315,23 +315,32 @@ export default function Admin() {
 
   return (
     <>
-      {/* Mode switcher */}
       <div style={{ maxWidth: 800, margin: '2rem auto' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>Admin</h2>
           <button onClick={handleLogout}>Sign Out</button>
         </div>
-        <div style={{ display:'flex', gap:8, marginBottom:16 }}>
-          <button
-            onClick={() => setMode('orders')}
-            className={mode === 'orders' ? 'btn' : ''}
-            style={{ padding:'8px 12px', borderRadius:8, border:'1px solid var(--border)', background: mode==='orders' ? 'var(--primary)' : 'var(--surface)', color: mode==='orders' ? 'white' : 'var(--text)'}}
-          >Check orders</button>
-          <button
-            onClick={() => setMode('inventory')}
-            className={mode === 'inventory' ? 'btn' : ''}
-            style={{ padding:'8px 12px', borderRadius:8, border:'1px solid var(--border)', background: mode==='inventory' ? 'var(--primary)' : 'var(--surface)', color: mode==='inventory' ? 'white' : 'var(--text)'}}
-          >Update stock</button>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16 }}>
+          {[
+            { key: 'orders', label: 'Check orders' },
+            { key: 'inventory', label: 'Update stock' },
+            { key: 'site', label: 'Edit site' },
+          ].map(option => (
+            <button
+              key={option.key}
+              onClick={() => setMode(option.key)}
+              className={mode === option.key ? 'btn' : ''}
+              style={{
+                padding:'8px 12px',
+                borderRadius:8,
+                border:'1px solid var(--border)',
+                background: mode===option.key ? 'var(--primary)' : 'var(--surface)',
+                color: mode===option.key ? 'white' : 'var(--text)',
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -342,199 +351,202 @@ export default function Admin() {
         </div>
       )}
 
-  {mode === 'inventory' && (
-  <div>
-  <div style={{ maxWidth: 400, margin: '2rem auto' }}>
-        <h2>{editId ? 'Edit' : 'Add New'} Item</h2>
-        <div style={{
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: '8px 12px',
-          marginBottom: 12,
-          background: 'var(--surface)'
-        }}>
-          <div style={{fontSize: 13, color: 'var(--muted)'}}>Signed in as</div>
-          <div style={{fontWeight: 600}}>{user?.email || '—'}</div>
-          <div style={{fontSize: 13}}>UID: <code>{user?.uid || '—'}</code></div>
-          <div style={{fontSize: 13}}>Email verified: {String(!!user?.emailVerified)}</div>
-          <button type="button" onClick={() => { navigator.clipboard?.writeText(user?.uid || ''); }} style={{marginTop: 6}}>Copy UID</button>
-          <div style={{fontSize: 12, color:'#b45309', marginTop: 6}}>
-            If you can't see items or save changes, add this UID to Firestore/Storage rules or use an admins collection.
-          </div>
-        </div>
-        <section className="card" style={{ marginBottom: 16 }}>
-          <h3 className="h3">Site visibility controls</h3>
-          <p className="muted" style={{ marginTop: 0 }}>Toggle the artists directory and artist profiles without redeploying.</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {['artistsEnabled', 'artistPagesEnabled'].map((flag) => {
-              const label = flag === 'artistsEnabled' ? 'Artists directory' : 'Artist profile pages'
-              const enabled = siteConfig?.[flag] ?? DEFAULT_SITE_VISIBILITY[flag]
-              const loadingFlag = toggleLoading[flag]
-              return (
-                <button
-                  key={flag}
-                  type="button"
-                  onClick={() => handleVisibilityToggle(flag)}
-                  disabled={siteConfigLoading || loadingFlag}
-                  className="btn"
-                  style={{
-                    alignSelf: 'flex-start',
-                    opacity: siteConfigLoading ? 0.6 : 1,
-                    pointerEvents: siteConfigLoading ? 'none' : undefined,
-                  }}
-                >
-                  {loadingFlag
-                    ? 'Updating…'
-                    : `${enabled ? 'Hide' : 'Show'} ${label}`}
-                </button>
-              )
-            })}
-          </div>
-          {toggleMessage && <p className="muted" style={{ marginTop: 10 }}>{toggleMessage}</p>}
-          {toggleError && <p style={{ color: '#dc2626', marginTop: 4 }}>{toggleError}</p>}
-        </section>
-        <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            placeholder="Name"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            required
-            style={{ width: '100%', marginBottom: 8 }}
-          />
-          <textarea
-            placeholder="Description"
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            required
-            style={{ width: '100%', marginBottom: 8 }}
-          />
-          <input
-            type="text"
-            placeholder="Materials"
-            value={materials}
-            onChange={e => setMaterials(e.target.value)}
-            required
-            style={{ width: '100%', marginBottom: 8 }}
-          />
-          <input
-            type="text"
-            placeholder="Craftsmanship"
-            value={craftsmanship}
-            onChange={e => setCraftsmanship(e.target.value)}
-            required
-            style={{ width: '100%', marginBottom: 8 }}
-          />
-          <input
-            type="number"
-            placeholder="Price (£)"
-            value={price}
-            onChange={e => setPrice(e.target.value)}
-            required
-            style={{ width: '100%', marginBottom: 8 }}
-          />
-          <label style={{ display: 'block', marginBottom: 8 }}>
-            <input
-              type="checkbox"
-              checked={customizable}
-              onChange={e => setCustomizable(e.target.checked)}
-              style={{ marginRight: 8 }}
-            />
-            Customizable (allow custom art/artist selection)
-          </label>
-          <label style={{ display: 'block', marginBottom: 8 }}>
-            <input
-              type="checkbox"
-              checked={published}
-              onChange={e => setPublished(e.target.checked)}
-              style={{ marginRight: 8 }}
-            />
-            Published (visible in the shop)
-          </label>
-          {existingImages.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <strong>Existing images:</strong>
-              <ul style={{ paddingLeft: 16 }}>
-                {existingImages.map((url, i) => (
-                  <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <img src={url} alt="existing" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }} />
-                    <button type="button" onClick={() => handleRemoveExistingImage(url)} style={{ color: 'red' }}>Remove</button>
-                  </li>
-                ))}
-              </ul>
+      {mode === 'inventory' && (
+        <div style={{ maxWidth: 650, margin: '2rem auto' }}>
+          <h2>{editId ? 'Edit' : 'Add New'} Item</h2>
+          <div style={{
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '8px 12px',
+            marginBottom: 12,
+            background: 'var(--surface)'
+          }}>
+            <div style={{fontSize: 13, color: 'var(--muted)'}}>Signed in as</div>
+            <div style={{fontWeight: 600}}>{user?.email || '—'}</div>
+            <div style={{fontSize: 13}}>UID: <code>{user?.uid || '—'}</code></div>
+            <div style={{fontSize: 13}}>Email verified: {String(!!user?.emailVerified)}</div>
+            <button type="button" onClick={() => { navigator.clipboard?.writeText(user?.uid || ''); }} style={{marginTop: 6}}>Copy UID</button>
+            <div style={{fontSize: 12, color:'#b45309', marginTop: 6}}>
+              If you can't see items or save changes, add this UID to Firestore/Storage rules or use an admins collection.
             </div>
-          )}
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleImageChange}
-            style={{ marginBottom: 8 }}
-          />
-          {images.length > 0 && (
-            <div style={{ marginBottom: 8 }}>
-              <strong>Selected images:</strong>
-              <ul style={{ paddingLeft: 16 }}>
-                {images.map((img, i) => <li key={i}>{img.name}</li>)}
-              </ul>
-            </div>
-          )}
-          <button type="submit" disabled={uploading} style={{ width: '100%' }}>
-            {uploading ? (editId ? 'Saving...' : 'Uploading...') : (editId ? 'Save Changes' : 'Add Item')}
-          </button>
-          {editId && (
-            <button type="button" onClick={() => {
-              setEditId(null);
-              setName('');
-              setDescription('');
-              setPrice('');
-              setImages([]);
-              setExistingImages([]);
-              setMaterials('');
-              setCraftsmanship('');
-              setCustomizable(true);
-            }} style={{ width: '100%', marginTop: 8 }}>Cancel Edit</button>
-          )}
-        </form>
-        {success && <div style={{ color: 'green', marginTop: 8 }}>Upload successful!</div>}
-        {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
-  </div>
-  <hr style={{ margin: '2rem 0' }} />
-      <h3>Existing Items</h3>
-      {loading ? <div>Loading...</div> : (
-        <div className="admin-items-grid">
-          {items.map(item => (
-            <div key={item.id} style={{
-              border: '1px solid #353634',
-              borderRadius: 12,
-              padding: 16,
-              background: 'var(--surface)',
-              boxShadow: '0 2px 8px 0 rgba(40,30,20,0.08)',
-              minHeight: 180,
-            }}>
-              <strong>{item.name}</strong><br />
-              {item.images && item.images[0] && <img src={item.images[0]} alt={item.name} style={{ maxWidth: '100%', maxHeight: 100, borderRadius: 8, margin: '8px 0' }} />}<br />
-              <div style={{ display:'flex', alignItems:'center', gap:8, margin:'6px 0' }}>
-                <label style={{ fontSize:12, color:'var(--muted)' }}>Stock:</label>
-                <input type="number" value={Number(item.stock ?? 0)} onChange={e => {
-                  const v = parseInt(e.target.value || '0', 10);
-                  setItems(prev => prev.map(it => it.id === item.id ? { ...it, stock: v } : it));
-                }} style={{ width:80 }} />
-                <button onClick={async () => {
-                  try {
-                    await updateDoc(doc(db, 'furniture', item.id), { stock: Number(item.stock ?? 0) });
-                  } catch (err) {
-                    alert('Failed to save stock: ' + (err?.message || 'unknown'))
-                  }
-                }}>Save</button>
+          </div>
+          <form onSubmit={handleSubmit}>
+            <input
+              type="text"
+              placeholder="Name"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              required
+              style={{ width: '100%', marginBottom: 8 }}
+            />
+            <textarea
+              placeholder="Description"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              required
+              style={{ width: '100%', marginBottom: 8 }}
+            />
+            <input
+              type="text"
+              placeholder="Materials"
+              value={materials}
+              onChange={e => setMaterials(e.target.value)}
+              required
+              style={{ width: '100%', marginBottom: 8 }}
+            />
+            <input
+              type="text"
+              placeholder="Craftsmanship"
+              value={craftsmanship}
+              onChange={e => setCraftsmanship(e.target.value)}
+              required
+              style={{ width: '100%', marginBottom: 8 }}
+            />
+            <input
+              type="number"
+              placeholder="Price (£)"
+              value={price}
+              onChange={e => setPrice(e.target.value)}
+              required
+              style={{ width: '100%', marginBottom: 8 }}
+            />
+            <label style={{ display: 'block', marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={customizable}
+                onChange={e => setCustomizable(e.target.checked)}
+                style={{ marginRight: 8 }}
+              />
+              Customizable (allow custom art/artist selection)
+            </label>
+            <label style={{ display: 'block', marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={published}
+                onChange={e => setPublished(e.target.checked)}
+                style={{ marginRight: 8 }}
+              />
+              Published (visible in the shop)
+            </label>
+            {existingImages.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <strong>Existing images:</strong>
+                <ul style={{ paddingLeft: 16 }}>
+                  {existingImages.map((url, i) => (
+                    <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <img src={url} alt="existing" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }} />
+                      <button type="button" onClick={() => handleRemoveExistingImage(url)} style={{ color: 'red' }}>Remove</button>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <button onClick={() => handleEdit(item)} style={{ marginRight: 8, marginBottom: 6 }}>Edit</button>
-              <button onClick={() => handleDelete(item.id)} style={{ color: 'red', marginTop: 0 }}>Delete</button>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleImageChange}
+              style={{ marginBottom: 8 }}
+            />
+            {images.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <strong>Selected images:</strong>
+                <ul style={{ paddingLeft: 16 }}>
+                  {images.map((img, i) => <li key={i}>{img.name}</li>)}
+                </ul>
+              </div>
+            )}
+            <button type="submit" disabled={uploading} style={{ width: '100%' }}>
+              {uploading ? (editId ? 'Saving...' : 'Uploading...') : (editId ? 'Save Changes' : 'Add Item')}
+            </button>
+            {editId && (
+              <button type="button" onClick={() => {
+                setEditId(null);
+                setName('');
+                setDescription('');
+                setPrice('');
+                setImages([]);
+                setExistingImages([]);
+                setMaterials('');
+                setCraftsmanship('');
+                setCustomizable(true);
+              }} style={{ width: '100%', marginTop: 8 }}>Cancel Edit</button>
+            )}
+          </form>
+          {success && <div style={{ color: 'green', marginTop: 8 }}>Upload successful!</div>}
+          {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
+          <hr style={{ margin: '2rem 0' }} />
+          <h3>Existing Items</h3>
+          {loading ? <div>Loading...</div> : (
+            <div className="admin-items-grid">
+              {items.map(item => (
+                <div key={item.id} style={{
+                  border: '1px solid #353634',
+                  borderRadius: 12,
+                  padding: 16,
+                  background: 'var(--surface)',
+                  boxShadow: '0 2px 8px 0 rgba(40,30,20,0.08)',
+                  minHeight: 180,
+                }}>
+                  <strong>{item.name}</strong><br />
+                  {item.images && item.images[0] && <img src={item.images[0]} alt={item.name} style={{ maxWidth: '100%', maxHeight: 100, borderRadius: 8, margin: '8px 0' }} />}<br />
+                  <div style={{ display:'flex', alignItems:'center', gap:8, margin:'6px 0' }}>
+                    <label style={{ fontSize:12, color:'var(--muted)' }}>Stock:</label>
+                    <input type="number" value={Number(item.stock ?? 0)} onChange={e => {
+                      const v = parseInt(e.target.value || '0', 10);
+                      setItems(prev => prev.map(it => it.id === item.id ? { ...it, stock: v } : it));
+                    }} style={{ width:80 }} />
+                    <button onClick={async () => {
+                      try {
+                        await updateDoc(doc(db, 'furniture', item.id), { stock: Number(item.stock ?? 0) });
+                      } catch (err) {
+                        alert('Failed to save stock: ' + (err?.message || 'unknown'))
+                      }
+                    }}>Save</button>
+                  </div>
+                  <button onClick={() => handleEdit(item)} style={{ marginRight: 8, marginBottom: 6 }}>Edit</button>
+                  <button onClick={() => handleDelete(item.id)} style={{ color: 'red', marginTop: 0 }}>Delete</button>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-  )}
-  </div>
+      )}
+
+      {mode === 'site' && (
+        <div style={{ maxWidth: 650, margin: '2rem auto' }}>
+          <section className="card" style={{ marginBottom: 16 }}>
+            <h3 className="h3">Site visibility controls</h3>
+            <p className="muted" style={{ marginTop: 0 }}>Toggle the artists directory and artist profiles without redeploying.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {['artistsEnabled', 'artistPagesEnabled'].map((flag) => {
+                const label = flag === 'artistsEnabled' ? 'Artists directory' : 'Artist profile pages'
+                const enabled = siteConfig?.[flag] ?? DEFAULT_SITE_VISIBILITY[flag]
+                const loadingFlag = toggleLoading[flag]
+                return (
+                  <button
+                    key={flag}
+                    type="button"
+                    onClick={() => handleVisibilityToggle(flag)}
+                    disabled={siteConfigLoading || loadingFlag}
+                    className="btn"
+                    style={{
+                      alignSelf: 'flex-start',
+                      opacity: siteConfigLoading ? 0.6 : 1,
+                      pointerEvents: siteConfigLoading ? 'none' : undefined,
+                    }}
+                  >
+                    {loadingFlag
+                      ? 'Updating…'
+                      : `${enabled ? 'Hide' : 'Show'} ${label}`}
+                  </button>
+                )
+              })}
+            </div>
+            {toggleMessage && <p className="muted" style={{ marginTop: 10 }}>{toggleMessage}</p>}
+            {toggleError && <p style={{ color: '#dc2626', marginTop: 4 }}>{toggleError}</p>}
+          </section>
+        </div>
       )}
     </>
   );

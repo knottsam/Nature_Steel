@@ -11,6 +11,10 @@ const DEFAULT_KEYWORDS = [
   'bowls',
   'vases',
   'pens',
+  'handmade pens',
+  'handmade furniture',
+  'handmade bowls',
+  'handmade vases',
   'custom art furniture',
   'handmade home decor',
 ]

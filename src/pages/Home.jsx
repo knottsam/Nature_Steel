@@ -1,10 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Skeg from '../../Skeg.jpg'
 import { Link } from 'react-router-dom'
-import ProductCard from '../components/ProductCard.jsx'
 import SEO from '../components/SEO.jsx'
 import { db } from '../firebase'
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore'
+import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore'
 
 const FEATURE_HIGHLIGHTS = [
   {
@@ -38,11 +37,25 @@ const TESTIMONIALS = [
 
 export default function Home() {
   const [recent, setRecent] = useState([])
+  const [galleryLoading, setGalleryLoading] = useState(true)
+  const [galleryError, setGalleryError] = useState('')
+  const [activeIndex, setActiveIndex] = useState(0)
+  const activeIndexRef = useRef(0)
+  const totalRef = useRef(0)
+  const sliderRef = useRef(null)
+  const [isCompactLayout, setIsCompactLayout] = useState(false)
   useEffect(() => {
     async function fetchRecent() {
+      setGalleryLoading(true)
+      setGalleryError('')
       try {
-        // Get up to 4 most recent pieces from Firestore
-        const q = query(collection(db, 'furniture'), orderBy('created', 'desc'), limit(4))
+        // Get up to 8 most recent published pieces from Firestore
+        const q = query(
+          collection(db, 'furniture'),
+          where('published', '==', true),
+          orderBy('created', 'desc'),
+          limit(8)
+        )
         const snap = await getDocs(q)
         setRecent(snap.docs.map(doc => {
           const d = doc.data()
@@ -56,10 +69,94 @@ export default function Home() {
             craftsmanship: d.craftsmanship || '',
           }
         }))
-      } catch {}
+      } catch (err) {
+        console.error('[Home] fetchRecent failed', err)
+        setGalleryError(err?.message || 'Unable to load the latest pieces.')
+      } finally {
+        setGalleryLoading(false)
+      }
     }
     fetchRecent()
   }, [])
+
+  useEffect(() => {
+    totalRef.current = recent.length
+  }, [recent.length])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return
+    }
+    const media = window.matchMedia('(max-width: 520px)')
+    const applyMatch = (mq) => setIsCompactLayout(Boolean(mq.matches))
+    applyMatch(media)
+    const handler = (event) => setIsCompactLayout(Boolean(event.matches))
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', handler)
+    } else if (typeof media.addListener === 'function') {
+      media.addListener(handler)
+    }
+    return () => {
+      if (typeof media.removeEventListener === 'function') {
+        media.removeEventListener('change', handler)
+      } else if (typeof media.removeListener === 'function') {
+        media.removeListener(handler)
+      }
+    }
+  }, [])
+
+  const setActive = useCallback((valueOrUpdater) => {
+    setActiveIndex(prev => {
+      const total = totalRef.current
+      if (!total) {
+        activeIndexRef.current = 0
+        return 0
+      }
+      const nextRaw = typeof valueOrUpdater === 'function' ? valueOrUpdater(prev) : valueOrUpdater
+      let next = Number.isFinite(nextRaw) ? Math.round(nextRaw) : 0
+      next = ((next % total) + total) % total
+      activeIndexRef.current = next
+      return next
+    })
+  }, [])
+
+  const goToNext = useCallback(() => {
+    if (totalRef.current <= 1) return
+    setActive(prev => prev + 1)
+  }, [setActive])
+
+  const goToPrev = useCallback(() => {
+    if (totalRef.current <= 1) return
+    setActive(prev => prev - 1)
+  }, [setActive])
+
+  useEffect(() => {
+    if (!recent.length) {
+      setActive(0)
+      return
+    }
+    setActive(0)
+  }, [recent.length, setActive])
+
+  useEffect(() => {
+    if (totalRef.current <= 1) return
+    const id = window.setInterval(() => {
+      setActive(prev => prev + 1)
+    }, 5200)
+    return () => window.clearInterval(id)
+  }, [setActive])
+  const totalRecent = recent.length
+
+  useEffect(() => {
+    if (!isCompactLayout) return
+    const slider = sliderRef.current
+    if (!slider) return
+  const activeCard = slider.querySelector('[data-gallery-card][data-active="true"]')
+    if (activeCard && typeof activeCard.scrollIntoView === 'function') {
+      activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+    }
+  }, [activeIndex, isCompactLayout])
+
   return (
     <div style={{ position: 'relative', minHeight: '100vh' }}>
       <SEO
@@ -88,7 +185,7 @@ export default function Home() {
       <div className="grid" style={{gap:'2rem', position: 'relative', zIndex: 1}}>
         <section className="hero">
         <div>
-          <div className="kicker">New drop</div>
+          <div className="kicker"></div>
           <h1 className="h1">Nature & Steel Bespoke: Handcrafted furniture & bespoke pieces. </h1>
           <p className="muted">Choose a piece, and we build you something one-of-a-kind. Transparent pricing. Made-to-order.</p>
           <div className="spacer" />
@@ -99,10 +196,76 @@ export default function Home() {
         </div>
       </section>
 
-      <section>
+      <section className="card gallery-section">
         <h2 className="h2">Recent pieces</h2>
-        <div className="grid grid-3">
-          {recent.map(p => <ProductCard key={p.id} product={p} />)}
+        <div className={`gallery-slider${isCompactLayout ? ' gallery-slider--compact' : ''}`} ref={sliderRef}>
+          {recent.map((p, index) => {
+            if (!totalRecent) return null
+            let offset = index - activeIndex
+            const half = Math.floor(totalRecent / 2)
+            if (offset > half) offset -= totalRecent
+            if (offset < -half) offset += totalRecent
+            const absOffset = Math.abs(offset)
+            const scale = Math.max(0.68, 1 - absOffset * 0.14)
+            const opacity = Math.max(0.25, 1 - absOffset * 0.22)
+            const blur = Math.min(absOffset * 1.2, 6)
+            const elevation = 100 - absOffset * 10
+            const classes = ['gallery-card']
+            if (offset === 0) classes.push('is-active')
+            else if (!isCompactLayout && Math.abs(offset) === 1) classes.push('is-near')
+            else if (!isCompactLayout) classes.push('is-far')
+            const cardStyles = isCompactLayout
+              ? {
+                  '--card-offset': 0,
+                  '--card-scale': 1,
+                  '--card-opacity': 1,
+                  '--card-blur': '0px',
+                  '--card-z': offset === 0 ? 2 : 1,
+                }
+              : {
+                  '--card-offset': offset,
+                  '--card-scale': scale,
+                  '--card-opacity': opacity,
+                  '--card-blur': `${blur}px`,
+                  '--card-z': elevation,
+                }
+            return (
+              <Link
+                key={p.id}
+                to={`/product/${p.slug}`}
+                className={classes.join(' ')}
+                data-gallery-card="true"
+                data-active={offset === 0 ? 'true' : 'false'}
+                style={{
+                  ...cardStyles,
+                }}
+                onFocus={() => setActive(index)}
+                onMouseEnter={() => setActive(index)}
+                onTouchStart={() => setActive(index)}
+              >
+                <img src={p.images[0]} alt={p.name} />
+              </Link>
+            )
+          })}
+        </div>
+        <div className="gallery-status">
+          {galleryLoading && (
+            <span>Fetching the latest pieces…</span>
+          )}
+          {!galleryLoading && galleryError && (
+            <span className="muted">{galleryError}</span>
+          )}
+          {!galleryLoading && !galleryError && !recent.length && (
+            <span className="muted">No published pieces yet.</span>
+          )}
+        </div>
+        <div className="gallery-controls">
+          <button type="button" onClick={goToPrev} className="gallery-button" aria-label="Show previous piece">
+            ←
+          </button>
+          <button type="button" onClick={goToNext} className="gallery-button" aria-label="Show next piece">
+            →
+          </button>
         </div>
       </section>
 
