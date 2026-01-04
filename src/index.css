@@ -105,6 +105,19 @@ img { max-width: 100%; display: block; border-radius: var(--r-md); }
 
 /* --- LAYOUT --- */
 .grid { display: grid; gap: 1.2rem; }
+.home-stacked-sections {
+  row-gap: clamp(1rem, 2.2vw, 1.35rem);
+  column-gap: clamp(1.5rem, 3vw, 2rem);
+}
+.home-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  column-gap: clamp(1.2rem, 2.6vw, 1.75rem);
+  row-gap: clamp(0.85rem, 2vw, 1.1rem);
+}
+.home-feature-grid > .card {
+  height: 100%;
+}
 .grid-3 { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 .grid-4 { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .row { display: flex; gap: 1rem; align-items: center; }
@@ -318,8 +331,8 @@ select:focus-visible, input:focus-visible, textarea:focus-visible {
 
 /* --- HERO (subtle wood/moss/steel blend) --- */
 .hero {
-  display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: 2.4rem;
-  padding: 2.4rem 2rem; border-radius: 22px;
+  display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 1.2rem;
+  padding: 1rem 2rem 1rem; border-radius: 22px;
   background:
     radial-gradient(120% 140% at 0% 0%, color-mix(in oklab, var(--primary-2) 22%, transparent) 0%, transparent 60%),
     radial-gradient(120% 120% at 100% 100%, color-mix(in oklab, var(--accent) 20%, transparent) 0%, transparent 60%),
@@ -329,12 +342,49 @@ select:focus-visible, input:focus-visible, textarea:focus-visible {
   box-shadow: 0 2px 12px rgba(0,0,0,0.25), var(--glow-wood);
 }
 
+.hero-subline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+  margin-top: 1.1rem;
+}
+
+.hero-subline-text {
+  flex: 1;
+  margin: 0;
+}
+
+.hero-inline-note {
+  margin-left: 0.3rem;
+  white-space: nowrap;
+}
+
+.hero-subline-btn {
+  flex-shrink: 0;
+}
+
 @media (max-width: 900px) { .hero { grid-template-columns: 1fr; padding: 1.5rem; } }
+
+@media (max-width: 640px) {
+  .hero-subline-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+  .hero-inline-note {
+    display: block;
+    margin: 0.4rem 0 0;
+  }
+  .hero-subline-btn {
+    width: 100%;
+  }
+}
 
 
 .gallery-section {
   border-radius: var(--r-lg);
-  padding: 2rem;
+  padding: 1.2rem 1.2rem 1.2rem;
   --gallery-card-width: 340px;
   --gallery-card-height: 400px;
   --gallery-spacing: 220px;
@@ -450,7 +500,7 @@ select:focus-visible, input:focus-visible, textarea:focus-visible {
     --gallery-card-width: min(84vw, 240px);
     --gallery-card-height: min(78vw, 240px);
     --gallery-spacing: calc(var(--gallery-card-width) * 0.72);
-    padding: 1.25rem 1rem 2rem;
+    padding: 1rem 0.9rem 1.55rem;
   }
   .gallery-slider {
     min-height: initial;

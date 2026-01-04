@@ -193,17 +193,18 @@ export default function Home() {
           objectFit: 'cover',
         }}
       />
-      <div className="grid" style={{gap:'2rem', position: 'relative', zIndex: 1}}>
+  <div className="grid home-stacked-sections" style={{ position: 'relative', zIndex: 1 }}>
         <section className="hero">
         <div>
           <div className="kicker"></div>
-          <h1 className="h1">Nature & Steel Bespoke: Handcrafted furniture & bespoke pieces. </h1>
-          <p className="muted">Choose a piece, and we build you something one-of-a-kind. Transparent pricing. Made-to-order.</p>
-          <div className="spacer" />
-          <Link className="btn" to="/shop">Shop Now</Link>
-        </div>
-        <div>
-          <img src="https://images.unsplash.com/photo-1538688423619-a81d3f23454b?q=80&w=1200&auto=format&fit=crop" alt="Hero furniture" />
+          <h1 className="h1">Nature & Steel Bespoke: Handcrafted, bespoke pieces. </h1>
+          <div className="hero-subline-row">
+            <p className="muted hero-subline-text">
+              Choose a piece, and we build you something one-of-a-kind. Transparent pricing.
+              <span className="hero-inline-note">Made-to-order.</span>
+            </p>
+            <Link className="btn hero-subline-btn" to="/shop">Shop Now</Link>
+          </div>
         </div>
       </section>
 
@@ -286,13 +287,7 @@ export default function Home() {
         </div>
       </section>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: '1.5rem',
-        }}
-      >
+      <div className="home-feature-grid">
         <section className="card">
           <h2 className="h2">Why choose Nature & Steel Bespoke?</h2>
           <div className="grid" style={{ gap: '1.5rem' }}>
