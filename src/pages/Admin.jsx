@@ -206,6 +206,11 @@ export default function Admin() {
         ? normalizedCoverCandidate
         : (imageUrls[0] || '');
 
+      const dedupedImages = Array.from(new Set(imageUrls.filter(Boolean)));
+      const orderedImages = finalCoverImage
+        ? [finalCoverImage, ...dedupedImages.filter((img) => img !== finalCoverImage)]
+        : dedupedImages;
+
       if (!normalizedMaterial) {
         throw new Error('Material is required.');
       }
@@ -217,7 +222,7 @@ export default function Admin() {
         name: name.trim(),
         description: description.trim(),
         price: pricePence,
-        images: imageUrls,
+  images: orderedImages,
         materials: normalizedMaterials,
         material: normalizedMaterial,
         itemType: normalizedItemType,
