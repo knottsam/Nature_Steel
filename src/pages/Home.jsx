@@ -59,15 +59,22 @@ export default function Home() {
         const snap = await getDocs(q)
         setRecent(snap.docs.map(doc => {
           const d = doc.data()
+          const gallery = Array.isArray(d.images)
+            ? d.images.map((img) => (typeof img === 'string' ? img.trim() : '')).filter(Boolean)
+            : (d.imageUrl ? [d.imageUrl] : [])
+          const cover = typeof d.coverImage === 'string' && d.coverImage.trim()
+            ? d.coverImage.trim()
+            : (gallery[0] || (typeof d.imageUrl === 'string' ? d.imageUrl : ''))
           return {
             ...d,
             id: doc.id,
             slug: d.slug || (d.name ? d.name.toLowerCase().replace(/\s+/g, '-') : doc.id),
-            images: d.images && d.images.length ? d.images : (d.imageUrl ? [d.imageUrl] : []),
+            images: gallery,
             basePricePence: d.price || 0,
             materials: d.materials || '',
             material: d.material ?? d.materials ?? '',
             itemType: d.itemType || '',
+            coverImage: cover,
           }
         }))
       } catch (err) {

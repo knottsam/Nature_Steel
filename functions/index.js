@@ -288,8 +288,20 @@ async function fetchCartDetails(cartItems) {
         return [];
       })();
       const fallbackImage = typeof data.imageUrl === "string" && data.imageUrl.trim() ? data.imageUrl.trim() : null;
-      const primaryImage = normalizedImages.length > 0 ? normalizedImages[0] : fallbackImage;
-      const mergedImages = normalizedImages.length > 0 ? normalizedImages : (primaryImage ? [primaryImage] : []);
+      const storedCoverImage = typeof data.coverImage === "string" && data.coverImage.trim() ? data.coverImage.trim() : null;
+      let mergedImages = normalizedImages;
+      if (storedCoverImage) {
+        if (mergedImages.includes(storedCoverImage)) {
+          mergedImages = [storedCoverImage, ...mergedImages.filter((img) => img !== storedCoverImage)];
+        } else {
+          mergedImages = [storedCoverImage, ...mergedImages];
+        }
+      }
+      if (mergedImages.length === 0 && fallbackImage) {
+        mergedImages = [fallbackImage];
+      }
+      mergedImages = mergedImages.slice(0, 10);
+      const primaryImage = mergedImages.length > 0 ? mergedImages[0] : fallbackImage;
       if (typeof data.stock === "number") {
         if (data.stock < qty) {
           errors.push({
@@ -318,6 +330,7 @@ async function fetchCartDetails(cartItems) {
         name,
         unitPrice,
         image: primaryImage,
+        coverImage: mergedImages.length > 0 ? mergedImages[0] : null,
         images: mergedImages,
         slug: data.slug || null,
       });

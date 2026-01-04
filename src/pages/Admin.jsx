@@ -27,6 +27,7 @@ export default function Admin() {
   const [materials, setMaterials] = useState('');
   const [material, setMaterial] = useState('');
   const [itemType, setItemType] = useState('');
+  const [coverImage, setCoverImage] = useState('');
   const [customizable, setCustomizable] = useState(true);
   const [published, setPublished] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -125,19 +126,32 @@ export default function Admin() {
     setName(item.name || '');
     setDescription(item.description || '');
     setPrice(item.price ? (item.price / 100).toString() : '');
+    const gallery = Array.isArray(item.images) && item.images.length
+      ? item.images
+      : (typeof item.imageUrl === 'string' && item.imageUrl ? [item.imageUrl] : []);
+    setExistingImages(gallery);
+    setImages([]); // new images to add
     setMaterials(item.materials || '');
     const existingMaterial = item.material ?? item.materials ?? '';
     setMaterial(typeof existingMaterial === 'string' ? existingMaterial : '');
     setItemType(item.itemType || '');
+    const initialCover = typeof item.coverImage === 'string' && item.coverImage
+      ? item.coverImage
+      : (gallery[0] || '');
+    setCoverImage(initialCover);
     setCustomizable(item.customizable !== undefined ? item.customizable : true);
     setPublished(!!item.published);
-    setExistingImages(item.images || []);
-    setImages([]); // new images to add
   };
 
   // Remove an existing image from the list and mark for deletion
   const handleRemoveExistingImage = (url) => {
-    setExistingImages(imgs => imgs.filter(img => img !== url));
+    setExistingImages((imgs) => {
+      const next = imgs.filter(img => img !== url);
+      if (coverImage === url) {
+        setCoverImage(next[0] || '');
+      }
+      return next;
+    });
     setImagesToDelete(list => [...list, url]);
   };
 
@@ -187,6 +201,10 @@ export default function Admin() {
       const normalizedMaterial = typeof material === 'string' ? material.trim() : '';
       const normalizedItemType = typeof itemType === 'string' ? itemType.trim() : '';
       const normalizedMaterials = typeof materials === 'string' ? materials.trim() : '';
+      const normalizedCoverCandidate = typeof coverImage === 'string' ? coverImage.trim() : '';
+      const finalCoverImage = normalizedCoverCandidate && imageUrls.includes(normalizedCoverCandidate)
+        ? normalizedCoverCandidate
+        : (imageUrls[0] || '');
 
       if (!normalizedMaterial) {
         throw new Error('Material is required.');
@@ -207,13 +225,21 @@ export default function Admin() {
         published,
         created: editId ? undefined : Timestamp.now(),
       };
+      if (finalCoverImage) {
+        data.coverImage = finalCoverImage;
+      }
+      Object.keys(data).forEach((key) => {
+        if (data[key] === undefined) {
+          delete data[key];
+        }
+      });
       if (editId) {
         // Remove undefined fields
-        Object.keys(data).forEach(k => data[k] === undefined && delete data[k]);
         console.log('[Admin] Updating doc:', editId);
         await updateDoc(doc(db, 'furniture', editId), {
           ...data,
           craftsmanship: deleteField(),
+          coverImage: finalCoverImage ? finalCoverImage : deleteField(),
           updated: Timestamp.now(),
         });
         console.log('[Admin] Update succeeded');
@@ -233,6 +259,7 @@ export default function Admin() {
       setMaterials('');
       setMaterial('');
       setItemType('');
+  setCoverImage('');
       setCustomizable(true);
       setPublished(false);
     } catch (err) {
@@ -463,12 +490,22 @@ export default function Admin() {
               <div style={{ marginBottom: 8 }}>
                 <strong>Existing images:</strong>
                 <ul style={{ paddingLeft: 16 }}>
-                  {existingImages.map((url, i) => (
-                    <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <img src={url} alt="existing" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }} />
-                      <button type="button" onClick={() => handleRemoveExistingImage(url)} style={{ color: 'red' }}>Remove</button>
-                    </li>
-                  ))}
+                  {existingImages.map((url, i) => {
+                    const isCover = coverImage === url;
+                    return (
+                      <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <img src={url} alt="existing" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }} />
+                        {isCover ? (
+                          <span className="badge-wood">Cover</span>
+                        ) : (
+                          <button type="button" onClick={() => setCoverImage(url)} style={{ marginRight: 4 }}>
+                            Set as cover
+                          </button>
+                        )}
+                        <button type="button" onClick={() => handleRemoveExistingImage(url)} style={{ color: 'red' }}>Remove</button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -501,6 +538,7 @@ export default function Admin() {
                 setMaterials('');
                 setMaterial('');
                 setItemType('');
+                setCoverImage('');
                 setCustomizable(true);
               }} style={{ width: '100%', marginTop: 8 }}>Cancel Edit</button>
             )}

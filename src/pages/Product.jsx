@@ -143,7 +143,23 @@ export default function Product() {
   if (!product) return <p>Not found</p>
 
   // Fallbacks for Firestore products
-  const images = product.images && product.images.length ? product.images : (product.imageUrl ? [product.imageUrl] : [])
+  const images = (() => {
+    const gallery = Array.isArray(product.images)
+      ? product.images.map((img) => (typeof img === 'string' ? img.trim() : '')).filter(Boolean)
+      : []
+    const fallback = typeof product.imageUrl === 'string' && product.imageUrl ? product.imageUrl : ''
+    if (!gallery.length && fallback) {
+      gallery.push(fallback)
+    }
+    const cover = typeof product.coverImage === 'string' && product.coverImage.trim()
+      ? product.coverImage.trim()
+      : ''
+    if (cover) {
+      const reordered = [cover, ...gallery.filter((img) => img !== cover)]
+      return reordered.length ? reordered : (fallback ? [fallback] : [])
+    }
+    return gallery.length ? gallery : (fallback ? [fallback] : [])
+  })()
   const price = priceForProduct(product, selectedArtist)
   const numericStock = typeof product.stock === 'number' ? product.stock : null
   const available = numericStock != null ? numericStock : 1

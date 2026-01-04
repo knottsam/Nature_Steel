@@ -7,6 +7,9 @@ export default function ProductCard({ product }) {
   const price = priceForProduct(product, null)
   const numericStock = typeof product.stock === 'number' ? product.stock : null
   const soldOut = numericStock != null ? numericStock <= 0 : false
+  const heroImage = product.coverImage
+    || (Array.isArray(product.images) && product.images.length ? product.images[0] : null)
+    || product.imageUrl
   const subtitle = (() => {
     const item = product.itemType && product.itemType.trim()
     const mat = (product.material || product.materials || '').trim()
@@ -17,7 +20,7 @@ export default function ProductCard({ product }) {
     <div className="card">
       <Link to={`/product/${product.slug}`}>
         <div style={{position:'relative'}}>
-          <img src={product.images[0]} alt={product.name} />
+          {heroImage && <img src={heroImage} alt={product.name} />}
           {soldOut && (
             <div style={{position:'absolute', top:8, left:8, background:'rgba(0,0,0,0.65)', color:'#fff', padding:'4px 8px', borderRadius:6, fontSize:12}}>Sold out</div>
           )}
