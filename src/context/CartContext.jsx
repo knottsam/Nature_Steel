@@ -44,11 +44,14 @@ export function CartProvider({ children }) {
           const cover = typeof d.coverImage === 'string' && d.coverImage.trim()
             ? d.coverImage.trim()
             : (gallery[0] || (typeof d.imageUrl === 'string' ? d.imageUrl : ''))
+          const orderedGallery = cover
+            ? [cover, ...gallery.filter((img) => img !== cover)]
+            : gallery
           return {
             ...d,
             id: doc.id,
             slug: d.slug || (d.name ? d.name.toLowerCase().replace(/\s+/g, '-') : doc.id),
-            images: gallery,
+            images: orderedGallery,
             basePricePence: d.price || 0,
             materials: d.materials || '',
             material: d.material ?? d.materials ?? '',

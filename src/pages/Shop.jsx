@@ -37,11 +37,14 @@ export default function Shop() {
               const cover = typeof data.coverImage === 'string' && data.coverImage.trim()
                 ? data.coverImage.trim()
                 : (gallery[0] || (typeof data.imageUrl === 'string' ? data.imageUrl : ''))
+              const orderedGallery = cover
+                ? [cover, ...gallery.filter((img) => img !== cover)]
+                : gallery
               return {
                 id: doc.id,
                 ...data,
                 slug: data.slug || data.name?.toLowerCase().replace(/\s+/g, '-'),
-                images: gallery,
+                images: orderedGallery,
                 basePricePence: data.price || 0,
                 materials: data.materials || '',
                 material: data.material ?? data.materials ?? '',
