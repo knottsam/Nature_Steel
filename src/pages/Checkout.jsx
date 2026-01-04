@@ -194,7 +194,7 @@ firebase functions:secrets:set SQUARE_ENVIRONMENT`}
             <h2 className='h2'>Payment</h2>
             <p className='muted' style={{ marginBottom: '1rem' }}>
               You will be redirected to a secure Square checkout where you can pay by card, Apple Pay, or Google Pay.
-              Square will collect your name and delivery address after the redirect.
+              Square will collect your name and delivery address after the redirect, and a “Return to Nature &amp; Steel” link on that page lets you cancel at any time.
             </p>
             {error && (
               <div style={{ color: 'crimson', marginBottom: 12 }}>

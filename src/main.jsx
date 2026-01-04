@@ -17,6 +17,7 @@ import Checkout from './pages/Checkout.jsx'
 import Admin from './pages/Admin.jsx'
 import CheckoutComplete from './pages/CheckoutComplete.jsx'
 import CheckoutCancelled from './pages/CheckoutCancelled.jsx'
+import CheckoutReturn from './pages/CheckoutReturn.jsx'
 import { SiteConfigProvider } from './context/SiteConfigContext.jsx'
 
 const router = createBrowserRouter([
@@ -36,6 +37,7 @@ const router = createBrowserRouter([
       { path: 'checkout', element: <Checkout /> },
       { path: 'checkout/complete', element: <CheckoutComplete /> },
       { path: 'checkout/cancelled', element: <CheckoutCancelled /> },
+  { path: 'checkout/return', element: <CheckoutReturn /> },
       { path: 'admin', element: <Admin /> },
     ],
   },
