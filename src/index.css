@@ -218,7 +218,7 @@ select:focus-visible, input:focus-visible, textarea:focus-visible {
   display: flex;
   justify-content: center;
   align-items: center;
-  overflow: visible;
+  overflow: hidden;
   perspective: 1600px;
   transform-style: preserve-3d;
 }

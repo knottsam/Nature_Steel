@@ -205,11 +205,16 @@ export default function Home() {
             const half = Math.floor(totalRecent / 2)
             if (offset > half) offset -= totalRecent
             if (offset < -half) offset += totalRecent
-            const absOffset = Math.abs(offset)
+            const maxVisibleOffset = isCompactLayout ? 0 : 2
+            const isHidden = !isCompactLayout && Math.abs(offset) > maxVisibleOffset
+            const displayOffset = isHidden
+              ? Math.sign(offset) * (maxVisibleOffset + 1)
+              : offset
+            const absOffset = Math.abs(displayOffset)
             const scale = Math.max(0.68, 1 - absOffset * 0.14)
-            const opacity = Math.max(0.25, 1 - absOffset * 0.22)
+            const opacity = isHidden ? 0 : Math.max(0.25, 1 - absOffset * 0.22)
             const blur = Math.min(absOffset * 1.2, 6)
-            const elevation = 100 - absOffset * 10
+            const elevation = isHidden ? 10 : 100 - absOffset * 10
             const classes = ['gallery-card']
             if (offset === 0) classes.push('is-active')
             else if (!isCompactLayout && Math.abs(offset) === 1) classes.push('is-near')
@@ -223,7 +228,7 @@ export default function Home() {
                   '--card-z': offset === 0 ? 2 : 1,
                 }
               : {
-                  '--card-offset': offset,
+                  '--card-offset': displayOffset,
                   '--card-scale': scale,
                   '--card-opacity': opacity,
                   '--card-blur': `${blur}px`,
@@ -238,7 +243,9 @@ export default function Home() {
                 data-active={offset === 0 ? 'true' : 'false'}
                 style={{
                   ...cardStyles,
+                  visibility: isHidden ? 'hidden' : 'visible',
                 }}
+                aria-hidden={isHidden ? 'true' : 'false'}
                 onFocus={() => setActive(index)}
                 onTouchStart={() => setActive(index)}
               >
