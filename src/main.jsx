@@ -1,24 +1,24 @@
-import React from 'react'
+import React, { lazy } from 'react'
 import ReactDOM from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import App from './App.jsx'
 import './index.css'
-
-import Home from './pages/Home.jsx'
-import Shop from './pages/Shop.jsx'
-import Product from './pages/Product.jsx'
-import Artists from './pages/Artists.jsx'
-import Artist from './pages/Artist.jsx'
-import FAQ from './pages/FAQ.jsx'
-import About from './pages/About.jsx'
-import Contact from './pages/Contact.jsx'
-import Cart from './pages/Cart.jsx'
-import Checkout from './pages/Checkout.jsx'
-import Admin from './pages/Admin.jsx'
-import CheckoutComplete from './pages/CheckoutComplete.jsx'
-import CheckoutCancelled from './pages/CheckoutCancelled.jsx'
-import CheckoutReturn from './pages/CheckoutReturn.jsx'
 import { SiteConfigProvider } from './context/SiteConfigContext.jsx'
+
+const Home = lazy(() => import('./pages/Home.jsx'))
+const Shop = lazy(() => import('./pages/Shop.jsx'))
+const Product = lazy(() => import('./pages/Product.jsx'))
+const Artists = lazy(() => import('./pages/Artists.jsx'))
+const Artist = lazy(() => import('./pages/Artist.jsx'))
+const FAQ = lazy(() => import('./pages/FAQ.jsx'))
+const About = lazy(() => import('./pages/About.jsx'))
+const Contact = lazy(() => import('./pages/Contact.jsx'))
+const Cart = lazy(() => import('./pages/Cart.jsx'))
+const Checkout = lazy(() => import('./pages/Checkout.jsx'))
+const Admin = lazy(() => import('./pages/Admin.jsx'))
+const CheckoutComplete = lazy(() => import('./pages/CheckoutComplete.jsx'))
+const CheckoutCancelled = lazy(() => import('./pages/CheckoutCancelled.jsx'))
+const CheckoutReturn = lazy(() => import('./pages/CheckoutReturn.jsx'))
 
 const router = createBrowserRouter([
   {
@@ -35,9 +35,9 @@ const router = createBrowserRouter([
       { path: 'contact', element: <Contact /> },
       { path: 'cart', element: <Cart /> },
       { path: 'checkout', element: <Checkout /> },
-      { path: 'checkout/complete', element: <CheckoutComplete /> },
-      { path: 'checkout/cancelled', element: <CheckoutCancelled /> },
-  { path: 'checkout/return', element: <CheckoutReturn /> },
+    { path: 'checkout/complete', element: <CheckoutComplete /> },
+    { path: 'checkout/cancelled', element: <CheckoutCancelled /> },
+    { path: 'checkout/return', element: <CheckoutReturn /> },
       { path: 'admin', element: <Admin /> },
     ],
   },

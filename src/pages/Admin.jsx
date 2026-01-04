@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { db, storage } from '../firebase';
-import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc, updateDoc, setDoc, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc, updateDoc, setDoc, query, orderBy, deleteField } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 import { useSiteConfig } from '../context/SiteConfigContext.jsx';
@@ -25,7 +25,9 @@ export default function Admin() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [materials, setMaterials] = useState('');
-  const [craftsmanship, setCraftsmanship] = useState('');
+  const [material, setMaterial] = useState('');
+  const [itemType, setItemType] = useState('');
+  const [coverImage, setCoverImage] = useState('');
   const [customizable, setCustomizable] = useState(true);
   const [published, setPublished] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -124,17 +126,32 @@ export default function Admin() {
     setName(item.name || '');
     setDescription(item.description || '');
     setPrice(item.price ? (item.price / 100).toString() : '');
+    const gallery = Array.isArray(item.images) && item.images.length
+      ? item.images
+      : (typeof item.imageUrl === 'string' && item.imageUrl ? [item.imageUrl] : []);
+    setExistingImages(gallery);
+    setImages([]); // new images to add
     setMaterials(item.materials || '');
-    setCraftsmanship(item.craftsmanship || '');
+    const existingMaterial = item.material ?? item.materials ?? '';
+    setMaterial(typeof existingMaterial === 'string' ? existingMaterial : '');
+    setItemType(item.itemType || '');
+    const initialCover = typeof item.coverImage === 'string' && item.coverImage
+      ? item.coverImage
+      : (gallery[0] || '');
+    setCoverImage(initialCover);
     setCustomizable(item.customizable !== undefined ? item.customizable : true);
     setPublished(!!item.published);
-    setExistingImages(item.images || []);
-    setImages([]); // new images to add
   };
 
   // Remove an existing image from the list and mark for deletion
   const handleRemoveExistingImage = (url) => {
-    setExistingImages(imgs => imgs.filter(img => img !== url));
+    setExistingImages((imgs) => {
+      const next = imgs.filter(img => img !== url);
+      if (coverImage === url) {
+        setCoverImage(next[0] || '');
+      }
+      return next;
+    });
     setImagesToDelete(list => [...list, url]);
   };
 
@@ -176,23 +193,55 @@ export default function Admin() {
           }
         }
       }
-      const pricePence = Math.round(parseFloat(price) * 100);
+      const priceNumber = parseFloat(price);
+      if (!Number.isFinite(priceNumber)) {
+        throw new Error('Please enter a valid price.');
+      }
+      const pricePence = Math.round(priceNumber * 100);
+      const normalizedMaterial = typeof material === 'string' ? material.trim() : '';
+      const normalizedItemType = typeof itemType === 'string' ? itemType.trim() : '';
+      const normalizedMaterials = typeof materials === 'string' ? materials.trim() : '';
+      const normalizedCoverCandidate = typeof coverImage === 'string' ? coverImage.trim() : '';
+      const finalCoverImage = normalizedCoverCandidate && imageUrls.includes(normalizedCoverCandidate)
+        ? normalizedCoverCandidate
+        : (imageUrls[0] || '');
+
+      if (!normalizedMaterial) {
+        throw new Error('Material is required.');
+      }
+      if (!normalizedItemType) {
+        throw new Error('Item type is required.');
+      }
+
       const data = {
-        name,
-        description,
+        name: name.trim(),
+        description: description.trim(),
         price: pricePence,
         images: imageUrls,
-        materials,
-        craftsmanship,
+        materials: normalizedMaterials,
+        material: normalizedMaterial,
+        itemType: normalizedItemType,
         customizable,
         published,
         created: editId ? undefined : Timestamp.now(),
       };
+      if (finalCoverImage) {
+        data.coverImage = finalCoverImage;
+      }
+      Object.keys(data).forEach((key) => {
+        if (data[key] === undefined) {
+          delete data[key];
+        }
+      });
       if (editId) {
         // Remove undefined fields
-        Object.keys(data).forEach(k => data[k] === undefined && delete data[k]);
         console.log('[Admin] Updating doc:', editId);
-        await updateDoc(doc(db, 'furniture', editId), data);
+        await updateDoc(doc(db, 'furniture', editId), {
+          ...data,
+          craftsmanship: deleteField(),
+          coverImage: finalCoverImage ? finalCoverImage : deleteField(),
+          updated: Timestamp.now(),
+        });
         console.log('[Admin] Update succeeded');
         setEditId(null);
       } else {
@@ -208,7 +257,9 @@ export default function Admin() {
       setExistingImages([]);
       setImagesToDelete([]);
       setMaterials('');
-      setCraftsmanship('');
+      setMaterial('');
+      setItemType('');
+  setCoverImage('');
       setCustomizable(true);
       setPublished(false);
     } catch (err) {
@@ -388,18 +439,25 @@ export default function Admin() {
             />
             <input
               type="text"
-              placeholder="Materials"
-              value={materials}
-              onChange={e => setMaterials(e.target.value)}
+              placeholder="Material (e.g. Walnut, Mild Steel)"
+              value={material}
+              onChange={e => setMaterial(e.target.value)}
               required
               style={{ width: '100%', marginBottom: 8 }}
             />
             <input
               type="text"
-              placeholder="Craftsmanship"
-              value={craftsmanship}
-              onChange={e => setCraftsmanship(e.target.value)}
+              placeholder="Item type (e.g. Bowl, Pen, Clock)"
+              value={itemType}
+              onChange={e => setItemType(e.target.value)}
               required
+              style={{ width: '100%', marginBottom: 8 }}
+            />
+            <input
+              type="text"
+              placeholder="Materials (detailed notes)"
+              value={materials}
+              onChange={e => setMaterials(e.target.value)}
               style={{ width: '100%', marginBottom: 8 }}
             />
             <input
@@ -432,12 +490,22 @@ export default function Admin() {
               <div style={{ marginBottom: 8 }}>
                 <strong>Existing images:</strong>
                 <ul style={{ paddingLeft: 16 }}>
-                  {existingImages.map((url, i) => (
-                    <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <img src={url} alt="existing" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }} />
-                      <button type="button" onClick={() => handleRemoveExistingImage(url)} style={{ color: 'red' }}>Remove</button>
-                    </li>
-                  ))}
+                  {existingImages.map((url, i) => {
+                    const isCover = coverImage === url;
+                    return (
+                      <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <img src={url} alt="existing" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4 }} />
+                        {isCover ? (
+                          <span className="badge-wood">Cover</span>
+                        ) : (
+                          <button type="button" onClick={() => setCoverImage(url)} style={{ marginRight: 4 }}>
+                            Set as cover
+                          </button>
+                        )}
+                        <button type="button" onClick={() => handleRemoveExistingImage(url)} style={{ color: 'red' }}>Remove</button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -468,7 +536,9 @@ export default function Admin() {
                 setImages([]);
                 setExistingImages([]);
                 setMaterials('');
-                setCraftsmanship('');
+                setMaterial('');
+                setItemType('');
+                setCoverImage('');
                 setCustomizable(true);
               }} style={{ width: '100%', marginTop: 8 }}>Cancel Edit</button>
             )}
@@ -490,6 +560,11 @@ export default function Admin() {
                 }}>
                   <strong>{item.name}</strong><br />
                   {item.images && item.images[0] && <img src={item.images[0]} alt={item.name} style={{ maxWidth: '100%', maxHeight: 100, borderRadius: 8, margin: '8px 0' }} />}<br />
+                  <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+                    <div><strong>Material:</strong> {item.material || item.materials || '—'}</div>
+                    <div><strong>Item type:</strong> {item.itemType || '—'}</div>
+                  </div>
+                  <div className="divider" style={{ margin: '0.8rem 0' }} />
                   <div style={{ display:'flex', alignItems:'center', gap:8, margin:'6px 0' }}>
                     <label style={{ fontSize:12, color:'var(--muted)' }}>Stock:</label>
                     <input type="number" value={Number(item.stock ?? 0)} onChange={e => {

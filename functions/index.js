@@ -278,6 +278,30 @@ async function fetchCartDetails(cartItems) {
       const data = snap.data() || {};
       const unitPrice = (typeof data.price === "number" && Number.isFinite(data.price)) ? Number(data.price) : null;
       const name = typeof data.name === "string" && data.name ? data.name : productId;
+      const normalizedImages = (() => {
+        if (Array.isArray(data.images)) {
+          return data.images
+              .map((url) => (typeof url === "string" ? url.trim() : ""))
+              .filter((url) => url)
+              .slice(0, 10);
+        }
+        return [];
+      })();
+      const fallbackImage = typeof data.imageUrl === "string" && data.imageUrl.trim() ? data.imageUrl.trim() : null;
+      const storedCoverImage = typeof data.coverImage === "string" && data.coverImage.trim() ? data.coverImage.trim() : null;
+      let mergedImages = normalizedImages;
+      if (storedCoverImage) {
+        if (mergedImages.includes(storedCoverImage)) {
+          mergedImages = [storedCoverImage, ...mergedImages.filter((img) => img !== storedCoverImage)];
+        } else {
+          mergedImages = [storedCoverImage, ...mergedImages];
+        }
+      }
+      if (mergedImages.length === 0 && fallbackImage) {
+        mergedImages = [fallbackImage];
+      }
+      mergedImages = mergedImages.slice(0, 10);
+      const primaryImage = mergedImages.length > 0 ? mergedImages[0] : fallbackImage;
       if (typeof data.stock === "number") {
         if (data.stock < qty) {
           errors.push({
@@ -305,7 +329,9 @@ async function fetchCartDetails(cartItems) {
         qty,
         name,
         unitPrice,
-        image: Array.isArray(data.images) && data.images.length ? data.images[0] : null,
+        image: primaryImage,
+        coverImage: mergedImages.length > 0 ? mergedImages[0] : null,
+        images: mergedImages,
         slug: data.slug || null,
       });
     } catch (err) {
@@ -670,6 +696,8 @@ exports.createSquareCheckoutLink = onCall({
       name: item.name || null,
       qty: item.qty,
       unitPrice: Number.isInteger(item.unitPrice) ? Number(item.unitPrice) : null,
+      image: item.image || null,
+      images: Array.isArray(item.images) ? item.images.slice(0, 10) : [],
     }));
 
     const orderRecord = {

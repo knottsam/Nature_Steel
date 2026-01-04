@@ -10,7 +10,9 @@ export const products = [
 		],
 		basePricePence: 35000,
 		materials: 'Steel, lacquer',
-		craftsmanship: 'TIG welded, brushed finish',
+		material: 'Steel',
+		itemType: 'Coffee table',
+		coverImage: 'https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?q=80&w=1200&auto=format&fit=crop',
 	},
 	{
 		id: 'demo-2',
@@ -22,6 +24,8 @@ export const products = [
 		],
 		basePricePence: 22000,
 		materials: 'Steel, reclaimed wood',
-		craftsmanship: 'Hand-cut, oil finish',
+		material: 'Steel and reclaimed wood',
+		itemType: 'Shelf',
+		coverImage: 'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?q=80&w=1200&auto=format&fit=crop',
 	},
 ]

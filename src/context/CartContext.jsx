@@ -28,7 +28,6 @@ export function CartProvider({ children }) {
 
   useEffect(() => {
     if (!configHealth.ok) {
-      // eslint-disable-next-line no-console
       console.warn('[CartContext] Skipping product subscription; missing Firebase config:', configHealth.missing)
       // In this case, keep demo or empty based on flag
       return
@@ -39,14 +38,22 @@ export function CartProvider({ children }) {
       try {
         const fromDb = querySnapshot.docs.map(doc => {
           const d = doc.data()
+          const gallery = Array.isArray(d.images)
+            ? d.images.map((img) => (typeof img === 'string' ? img.trim() : '')).filter(Boolean)
+            : (d.imageUrl ? [d.imageUrl] : [])
+          const cover = typeof d.coverImage === 'string' && d.coverImage.trim()
+            ? d.coverImage.trim()
+            : (gallery[0] || (typeof d.imageUrl === 'string' ? d.imageUrl : ''))
           return {
             ...d,
             id: doc.id,
             slug: d.slug || (d.name ? d.name.toLowerCase().replace(/\s+/g, '-') : doc.id),
-            images: d.images && d.images.length ? d.images : (d.imageUrl ? [d.imageUrl] : []),
+            images: gallery,
             basePricePence: d.price || 0,
             materials: d.materials || '',
-            craftsmanship: d.craftsmanship || '',
+            material: d.material ?? d.materials ?? '',
+            itemType: d.itemType || '',
+            coverImage: cover,
           }
         })
         if (fromDb.length > 0) {

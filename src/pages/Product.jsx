@@ -143,11 +143,33 @@ export default function Product() {
   if (!product) return <p>Not found</p>
 
   // Fallbacks for Firestore products
-  const images = product.images && product.images.length ? product.images : (product.imageUrl ? [product.imageUrl] : [])
+  const images = (() => {
+    const gallery = Array.isArray(product.images)
+      ? product.images.map((img) => (typeof img === 'string' ? img.trim() : '')).filter(Boolean)
+      : []
+    const fallback = typeof product.imageUrl === 'string' && product.imageUrl ? product.imageUrl : ''
+    if (!gallery.length && fallback) {
+      gallery.push(fallback)
+    }
+    const cover = typeof product.coverImage === 'string' && product.coverImage.trim()
+      ? product.coverImage.trim()
+      : ''
+    if (cover) {
+      const reordered = [cover, ...gallery.filter((img) => img !== cover)]
+      return reordered.length ? reordered : (fallback ? [fallback] : [])
+    }
+    return gallery.length ? gallery : (fallback ? [fallback] : [])
+  })()
   const price = priceForProduct(product, selectedArtist)
   const numericStock = typeof product.stock === 'number' ? product.stock : null
   const available = numericStock != null ? numericStock : 1
   const soldOut = numericStock != null ? numericStock <= 0 : false
+  const summaryLine = (() => {
+    const item = product.itemType && product.itemType.trim()
+    const mat = (product.material || product.materials || '').trim()
+    if (item && mat) return `${item} • ${mat}`
+    return item || mat || product.description || ''
+  })()
 
   // Only show customization dropdown if customizable (default true for static products)
   const isCustomizable = product.customizable !== undefined ? product.customizable : true;
@@ -160,7 +182,10 @@ export default function Product() {
       <div>
         <h1 className="h1">{product.name}</h1>
         <div className="price" style={{fontSize:'1.6rem'}}>{formatPrice(price, 'GBP')}</div>
-        <p className="muted">{product.materials || product.description}</p>
+        {summaryLine && <p className="muted">{summaryLine}</p>}
+        {product.description && (
+          <p style={{ marginTop: '0.75rem' }}>{product.description}</p>
+        )}
         <div className="divider" />
 
         {isCustomizable ? (
@@ -228,8 +253,11 @@ export default function Product() {
         <div className="divider" />
         <h3>Details</h3>
         <ul>
-          <li><strong>Materials:</strong> {product.materials || '—'}</li>
-          <li><strong>Craftsmanship:</strong> {product.craftsmanship || '—'}</li>
+          <li><strong>Item type:</strong> {product.itemType || '—'}</li>
+          <li><strong>Material:</strong> {product.material || product.materials || '—'}</li>
+          {product.materials && product.materials !== product.material && (
+            <li><strong>Materials (details):</strong> {product.materials}</li>
+          )}
         </ul>
 
         <div className="divider" />

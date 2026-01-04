@@ -10,18 +10,21 @@ service cloud.firestore {
 
     function isValidFurniture() {
       return request.resource.data.keys().hasOnly([
-        'name', 'description', 'price', 'images', 'materials', 'craftsmanship',
-        'customizable', 'published', 'stock', 'created'
+  'name', 'description', 'price', 'images', 'materials', 'material', 'itemType', 'coverImage',
+  'customizable', 'published', 'stock', 'created', 'updated'
       ])
       && request.resource.data.name is string
       && request.resource.data.description is string
       && request.resource.data.materials is string
-      && request.resource.data.craftsmanship is string
       && request.resource.data.price is int
       && request.resource.data.price >= 0
+      && (!('material' in request.resource.data) || request.resource.data.material is string)
+      && (!('itemType' in request.resource.data) || request.resource.data.itemType is string)
+  && (!('coverImage' in request.resource.data) || request.resource.data.coverImage is string)
       && (!('stock' in request.resource.data) || request.resource.data.stock is int)
       && (!('customizable' in request.resource.data) || request.resource.data.customizable is bool)
-      && (!('published' in request.resource.data) || request.resource.data.published is bool);
+      && (!('published' in request.resource.data) || request.resource.data.published is bool)
+      && (!('updated' in request.resource.data) || request.resource.data.updated is timestamp);
     }
 
     match /furniture/{docId} {

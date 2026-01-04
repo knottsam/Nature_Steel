@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import { Outlet } from 'react-router-dom'
 import NavBar from './components/NavBar.jsx'
 import Footer from './components/Footer.jsx'
@@ -40,7 +40,9 @@ export default function App() {
       <div className="app">
         <NavBar />
         <main className="container">
-          <Outlet />
+          <Suspense fallback={<div className="muted">Loading...</div>}>
+            <Outlet />
+          </Suspense>
         </main>
         <Footer />
       </div>

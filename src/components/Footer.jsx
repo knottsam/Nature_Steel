@@ -25,13 +25,7 @@ export default function Footer() {
               <li><Link to="/contact">Contact</Link></li>
             </ul>
           </div>
-          <div>
-            <div className="h3">Newsletter</div>
-            <p className="muted">Get product drops and new artist collabs.</p>
-            <form onSubmit={(e)=>e.preventDefault()}>
-              <input placeholder="you@email.com" />
-            </form>
-          </div>
+          
         </div>
         <div className="divider" />
         <small className="muted">© {new Date().getFullYear()} Nature & Steel Bespoke. All rights reserved.</small>

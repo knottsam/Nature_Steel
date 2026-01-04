@@ -31,11 +31,9 @@ export const configHealth = {
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
 };
 if (!configHealth.ok) {
-  // eslint-disable-next-line no-console
   console.error('[firebase] Missing Firebase env variables in .env.local:', missing.join(', '));
   // Helpful hint for projectId undefined -> Firestore Listen 400
   if (!import.meta.env.VITE_FIREBASE_PROJECT_ID) {
-    // eslint-disable-next-line no-console
     console.error('[firebase] VITE_FIREBASE_PROJECT_ID is undefined. Firestore real-time listeners will fail with projects/undefined.');
   }
 }
@@ -66,10 +64,8 @@ export const functions = getFunctions(app, customDomain || region || undefined);
 if (import.meta.env.VITE_USE_FUNCTIONS_EMULATOR === '1') {
   try {
     connectFunctionsEmulator(functions, 'localhost', 5001);
-    // eslint-disable-next-line no-console
     console.log('[firebase] Connected Functions to emulator at localhost:5001');
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.warn('[firebase] Failed to connect Functions emulator:', e);
   }
 }
