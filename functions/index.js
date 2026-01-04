@@ -161,6 +161,190 @@ function validateSquareSignature(req, secret, options = {}) {
   };
 }
 
+function sanitizeOriginUrl(origin) {
+  if (typeof origin !== "string") return "";
+  const trimmed = origin.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    if (!/^https?:$/.test(url.protocol)) return "";
+    return url.origin;
+  } catch {
+    return "";
+  }
+}
+
+function isAllowedSquareRedirect(url) {
+  if (typeof url !== "string") return false;
+  const trimmed = url.trim();
+  if (!trimmed) return false;
+  return trimmed.startsWith("https://");
+}
+
+function parseCartItemsPayload(rawItems) {
+  if (rawItems == null) {
+    throw new HttpsError(
+        "invalid-argument",
+        "No items to purchase",
+        {details: "Cart is empty."},
+    );
+  }
+  let parsed;
+  try {
+    parsed = typeof rawItems === "string" ? JSON.parse(rawItems) : rawItems;
+  } catch (err) {
+    throw new HttpsError(
+        "invalid-argument",
+        "Invalid itemsJson",
+        {details: "itemsJson must be a JSON-encoded array of { productId, qty }."},
+    );
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new HttpsError(
+        "invalid-argument",
+        "No items to purchase",
+        {details: "Your cart appears to be empty."},
+    );
+  }
+
+  const normalized = parsed.map((entry) => {
+    const productId = entry && (entry.productId != null ? String(entry.productId) : null);
+    const qty = Number(entry && entry.qty);
+    if (!productId || !Number.isInteger(qty) || qty <= 0) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Invalid cart item",
+          {details: "Each item must include productId and positive integer qty."},
+      );
+    }
+    return {productId, qty};
+  });
+
+  return normalized;
+}
+
+function buildItemsSummary(details) {
+  if (!Array.isArray(details) || !details.length) return "";
+  return details.map((item) => {
+    const label = item.name || item.productId;
+    return `${label}×${item.qty}`;
+  }).join(", ");
+}
+
+function computeCatalogTotal(details) {
+  if (!Array.isArray(details)) return 0;
+  return details.reduce((total, item) => {
+    const unit = Number.isFinite(item && item.unitPrice) ? Number(item.unitPrice) : 0;
+    return total + (unit * Number(item && item.qty || 0));
+  }, 0);
+}
+
+async function fetchCartDetails(cartItems) {
+  if (!Array.isArray(cartItems) || cartItems.length === 0) {
+    return {items: [], total: 0};
+  }
+
+  initAdmin();
+  const db = getFirestore();
+  const errors = [];
+  const details = [];
+
+  await Promise.all(cartItems.map(async (line) => {
+    const productId = String(line.productId);
+    const qty = Number(line.qty);
+    try {
+      const ref = db.collection("furniture").doc(productId);
+      const snap = await ref.get();
+      if (!snap.exists) {
+        errors.push({productId, reason: "not-found"});
+        return;
+      }
+      const data = snap.data() || {};
+      const unitPrice = (typeof data.price === "number" && Number.isFinite(data.price)) ? Number(data.price) : null;
+      const name = typeof data.name === "string" && data.name ? data.name : productId;
+      if (typeof data.stock === "number") {
+        if (data.stock < qty) {
+          errors.push({
+            productId,
+            name,
+            reason: "insufficient",
+            available: data.stock,
+            requested: qty,
+          });
+          return;
+        }
+      } else if (qty > 1) {
+        errors.push({
+          productId,
+          name,
+          reason: "insufficient",
+          available: 1,
+          requested: qty,
+        });
+        return;
+      }
+
+      details.push({
+        productId,
+        qty,
+        name,
+        unitPrice,
+        image: Array.isArray(data.images) && data.images.length ? data.images[0] : null,
+        slug: data.slug || null,
+      });
+    } catch (err) {
+      errors.push({productId, reason: "check-failed", message: err && err.message});
+    }
+  }));
+
+  if (errors.length > 0) {
+    const msg = errors.map((e) => {
+      if (e.reason === "not-found") return `Product ${e.productId} is unavailable.`;
+      if (e.reason === "insufficient") return `${e.name || e.productId} only has ${e.available} available (requested ${e.requested}).`;
+      return `Could not verify stock for ${e.productId}.`;
+    }).join(" ");
+    throw new HttpsError(
+        "failed-precondition",
+        "Out of stock",
+        {details: msg, items: errors},
+    );
+  }
+
+  return {
+    items: details,
+    total: computeCatalogTotal(details),
+    summary: buildItemsSummary(details),
+  };
+}
+
+async function adjustInventoryForOrder(items) {
+  if (!Array.isArray(items) || items.length === 0) return;
+  initAdmin();
+  const db = getFirestore();
+  for (const line of items) {
+    try {
+      const productId = String(line && line.productId);
+      const qty = Number(line && line.qty);
+      if (!productId || !Number.isInteger(qty) || qty <= 0) continue;
+      const ref = db.collection("furniture").doc(productId);
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const data = snap.data() || {};
+        if (typeof data.stock === "number") {
+          const next = Math.max(0, data.stock - qty);
+          tx.update(ref, {stock: next});
+        } else {
+          tx.delete(ref);
+        }
+      });
+      console.log("[inventory] Updated stock for", productId, "qty", qty);
+    } catch (err) {
+      console.error("[inventory] Failed to update stock for", line && line.productId, err);
+    }
+  }
+}
+
 function getSquarePublicConfig() {
   const applicationId = readSecret(squareApplicationId, "SQUARE_APPLICATION_ID");
   const locationId = readSecret(squareLocationId, "SQUARE_LOCATION_ID");
@@ -259,94 +443,22 @@ exports.createPayment = onCall({secrets: [squareAccessToken]}, async (request) =
       );
     }
 
-    // Parse and validate items for stock availability BEFORE creating the PaymentIntent
-    let cartItems = [];
-    try {
-      cartItems = itemsJson ? JSON.parse(itemsJson) : [];
-    } catch (e) {
-      throw new HttpsError(
-          "invalid-argument",
-          "Invalid itemsJson",
-          {details: "itemsJson must be a JSON-encoded array of { productId, qty }."},
-      );
-    }
-    if (!Array.isArray(cartItems) || cartItems.length === 0) {
-      throw new HttpsError(
-          "invalid-argument",
-          "No items to purchase",
-          {details: "Your cart appears to be empty."},
-      );
-    }
-    // Ensure each item has proper shape
-    for (const line of cartItems) {
-      const qty = Number(line && line.qty);
-      const pid = line && (line.productId != null ? String(line.productId) : null);
-      if (!pid || !Number.isInteger(qty) || qty <= 0) {
-        throw new HttpsError(
-            "invalid-argument",
-            "Invalid cart item",
-            {details: `Each item must have productId and positive integer qty.`},
-        );
-      }
-    }
-
-  // Check stock in Firestore. If a product document exists and has a numeric 'stock' field,
-  // require stock >= requested qty. If the product doc is missing, treat as unavailable.
-  // If the product has no numeric 'stock', treat it as a one-of-a-kind item with stock=1
-  // and require qty <= 1.
-    initAdmin();
-    const db = getFirestore();
-    const errors = [];
-
-    // Fetch all product docs in parallel
-    await Promise.all(cartItems.map(async (line) => {
-      const productId = String(line.productId);
-      const qty = Number(line.qty);
-      try {
-        const ref = db.collection("furniture").doc(productId);
-        const snap = await ref.get();
-        if (!snap.exists) {
-          errors.push({productId, reason: "not-found"});
-          return;
-        }
-        const data = snap.data() || {};
-        const name = data.name || null;
-        if (typeof data.stock === "number") {
-          if (data.stock < qty) {
-            errors.push({productId, name, reason: "insufficient", available: data.stock, requested: qty});
-          }
-        } else {
-          // Untracked stock => assume stock=1; require qty <= 1
-          if (qty > 1) {
-            errors.push({productId, name, reason: "insufficient", available: 1, requested: qty});
-          }
-        }
-      } catch (e) {
-        errors.push({productId, reason: "check-failed", message: e && e.message});
-      }
-    }));
-
-    if (errors.length > 0) {
-      // Build a readable error message
-      const msg = errors.map((e) => {
-        if (e.reason === "not-found") return `Product ${e.productId} is unavailable.`;
-        if (e.reason === "insufficient") return `${e.name || e.productId} only has ${e.available} in stock (you requested ${e.requested}).`;
-        return `Could not verify stock for ${e.productId}.`;
-      }).join(" ");
-      throw new HttpsError(
-          "failed-precondition",
-          "Out of stock",
-          {details: msg, items: errors},
-      );
-    }
+    // Parse cart items and verify availability
+    const cartItems = parseCartItemsPayload(itemsJson);
+    const cartDetails = await fetchCartDetails(cartItems);
+    const normalizedItemsSummary = (typeof itemsSummary === "string" && itemsSummary.trim()) ?
+      itemsSummary.trim() :
+      cartDetails.summary;
+    const normalizedItemsJson = JSON.stringify(cartItems).slice(0, 450);
+    const currencyCode = String(currency || "GBP").toUpperCase();
 
     // Return the amount and currency - client will tokenize the card and complete payment
     return {
       amount,
-      currency: currency.toUpperCase(),
+      currency: currencyCode,
       locationId,
-      itemsSummary,
-      itemsJson,
+      itemsSummary: normalizedItemsSummary,
+      itemsJson: normalizedItemsJson,
       userEmail,
       userName,
     };
@@ -362,6 +474,241 @@ exports.createPayment = onCall({secrets: [squareAccessToken]}, async (request) =
     };
     // Send generic error code but include details for the client to display
     throw new HttpsError("internal", "Payment preparation failed", detail);
+  }
+});
+
+exports.createSquareCheckoutLink = onCall({
+  secrets: [squareAccessToken, squareEnvironment, squareLocationId, squareApplicationId],
+}, async (request) => {
+  try {
+    assertAppCheck(request);
+
+    const accessToken = getSquareAccessToken();
+    if (!accessToken) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Square access token not configured",
+          {hint: "Set SQUARE_ACCESS_TOKEN as a Functions secret in Firebase."},
+      );
+    }
+
+    const environment = getSquareEnvironment();
+    const {locationId} = getSquarePublicConfig();
+    if (!locationId) {
+      throw new HttpsError(
+          "failed-precondition",
+          "Square location not configured",
+          {hint: "Set SQUARE_LOCATION_ID as a Functions secret in Firebase."},
+      );
+    }
+
+    const {
+      amount,
+      currency = "GBP",
+      itemsSummary,
+      itemsJson,
+      userEmail,
+      userName,
+      address,
+      city,
+      postcode,
+      countryCode,
+      origin,
+    } = request.data || {};
+
+    const cartItems = parseCartItemsPayload(itemsJson);
+    const cartDetails = await fetchCartDetails(cartItems);
+
+    let totalAmount = Number(amount);
+    if (!Number.isInteger(totalAmount) || totalAmount <= 0) {
+      totalAmount = cartDetails.total;
+    }
+    if (!Number.isInteger(totalAmount) || totalAmount <= 0) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Invalid amount",
+          {details: "Cart total is invalid."},
+      );
+    }
+
+    const currencyCode = String(currency || "GBP").toUpperCase();
+    const summary = (typeof itemsSummary === "string" && itemsSummary.trim()) ?
+      itemsSummary.trim() :
+      cartDetails.summary;
+    const sanitizedItemsJson = JSON.stringify(cartItems).slice(0, 2000);
+    const sanitizedOrigin = sanitizeOriginUrl(origin);
+    const originBase = sanitizedOrigin ? sanitizedOrigin.replace(/\/$/, "") : "";
+    const originSuccess = originBase ? `${originBase}/checkout/complete` : "";
+    const originCancel = originBase ? `${originBase}/checkout/cancelled` : "";
+    const envSuccess = process.env.SQUARE_CHECKOUT_SUCCESS_URL || "";
+    const envCancel = process.env.SQUARE_CHECKOUT_CANCEL_URL || "";
+    const successUrl = isAllowedSquareRedirect(originSuccess) ?
+      originSuccess :
+      (isAllowedSquareRedirect(envSuccess) ? envSuccess.trim() : "");
+    const cancelUrl = isAllowedSquareRedirect(originCancel) ?
+      originCancel :
+      (isAllowedSquareRedirect(envCancel) ? envCancel.trim() : "");
+
+    const base = environment === "production" ?
+      "https://connect.squareup.com" :
+      "https://connect.squareupsandbox.com";
+    const idempotencyKey = crypto.randomUUID();
+
+    const canUseDetailedItems = cartDetails.items.every(
+        (item) => Number.isInteger(item.unitPrice) && item.unitPrice > 0,
+    );
+    const lineItems = canUseDetailedItems ?
+      cartDetails.items.map((item) => ({
+        name: item.name || item.productId,
+        quantity: String(item.qty),
+        base_price_money: {
+          amount: Number(item.unitPrice),
+          currency: currencyCode,
+        },
+        note: item.productId,
+      })) :
+      [{
+        name: summary || "Nature & Steel Order",
+        quantity: "1",
+        base_price_money: {
+          amount: totalAmount,
+          currency: currencyCode,
+        },
+      }];
+
+    const orderPayload = {
+      location_id: locationId,
+      reference_id: idempotencyKey,
+      line_items: lineItems,
+    };
+    if (summary) {
+      orderPayload.note = summary.slice(0, 500);
+    }
+
+    const checkoutOptions = {
+      allow_tipping: false,
+    };
+    if (successUrl) checkoutOptions.redirect_url = successUrl;
+    if (cancelUrl) checkoutOptions.cancel_url = cancelUrl;
+    if (address || city || postcode || countryCode) {
+      checkoutOptions.ask_for_shipping_address = true;
+    }
+
+    const normalizedCountry = typeof countryCode === "string" && countryCode.trim() ? countryCode.trim().toUpperCase() : undefined;
+    const prePopulated = {};
+    if (userEmail) prePopulated.buyer_email = String(userEmail).trim();
+    if (address || city || postcode || normalizedCountry) {
+      prePopulated.buyer_address = {
+        address_line_1: address || undefined,
+        locality: city || undefined,
+        postal_code: postcode || undefined,
+        country: normalizedCountry || undefined,
+      };
+    }
+
+    const requestBody = {
+      idempotency_key: idempotencyKey,
+      order: orderPayload,
+      checkout_options: checkoutOptions,
+    };
+    if (Object.keys(prePopulated).length > 0) {
+      requestBody.pre_populated_data = prePopulated;
+    }
+
+    const response = await fetch(`${base}/v2/online-checkout/payment-links`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      const error = new Error(`Square payment link API error ${response.status}: ${text}`);
+      error.status = response.status;
+      error.responseBody = text;
+      throw error;
+    }
+
+    const payload = await response.json();
+    const link = payload && payload.payment_link;
+    if (!link || !link.url) {
+      throw new Error("Square payment link response missing url");
+    }
+
+    const orderId = link.order_id || null;
+    const paymentLinkId = link.id || null;
+    const docId = orderId || paymentLinkId || idempotencyKey;
+
+    initAdmin();
+    const db = getFirestore();
+    const storedItems = cartDetails.items.map((item) => ({
+      productId: item.productId,
+      name: item.name || null,
+      qty: item.qty,
+      unitPrice: Number.isInteger(item.unitPrice) ? Number(item.unitPrice) : null,
+    }));
+
+    const orderRecord = {
+      id: docId,
+      status: "PENDING",
+      created: Timestamp.now(),
+      amount: totalAmount,
+      catalogAmount: cartDetails.total || null,
+      currency: currencyCode,
+      itemsSummary: summary,
+      items: storedItems,
+      itemsJson: sanitizedItemsJson,
+      customer: {
+        name: typeof userName === "string" ? userName.trim() : null,
+        email: userEmail || null,
+        address: address || null,
+        city: city || null,
+        postcode: postcode || null,
+        countryCode: normalizedCountry || null,
+      },
+      paymentLinkId: paymentLinkId,
+      paymentLinkUrl: link.url,
+      squareOrderId: orderId,
+      squareLocationId: locationId,
+      environment,
+      idempotencyKey,
+      quickPay: !canUseDetailedItems,
+      source: "square-payment-link",
+    };
+
+    await db.collection("orders").doc(docId).set(orderRecord, {merge: true});
+
+    return {
+      checkoutUrl: link.url,
+      paymentLinkId,
+      orderId,
+      expiresAt: link.expires_at || null,
+      redirectConfigured: Boolean(successUrl),
+    };
+  } catch (err) {
+    console.error("createSquareCheckoutLink error:", err);
+    if (err instanceof HttpsError) throw err;
+    const message = err && err.message ? err.message : "Failed to create Square checkout";
+    const status = typeof err?.status === "number" ? err.status : undefined;
+    const code = (() => {
+      if (status === 400) return "invalid-argument";
+      if (status === 401) return "unauthenticated";
+      if (status === 403) return "permission-denied";
+      if (status === 404) return "not-found";
+      if (status === 429) return "resource-exhausted";
+      if (status && status >= 500) return "internal";
+      return "internal";
+    })();
+    const details = {message};
+    if (status != null) details.status = status;
+    if (err && typeof err.responseBody === "string" && err.responseBody) {
+      details.response = err.responseBody.slice(0, 2000);
+    }
+    throw new HttpsError(code, message, details);
   }
 });
 
@@ -499,27 +846,7 @@ exports.processSquarePayment = onCall({secrets: [squareAccessToken, squareEnviro
 
     // Decrement stock levels for each item
     const parsedItems = order.items || [];
-    for (const line of parsedItems) {
-      try {
-        const ref = db.collection("furniture").doc(String(line.productId));
-        await db.runTransaction(async (tx) => {
-          const snap = await tx.get(ref);
-          if (!snap.exists) return;
-          const data = snap.data() || {};
-          if (typeof data.stock === "number") {
-            const current = data.stock;
-            const next = Math.max(0, current - Number(line.qty || 0));
-            tx.update(ref, {stock: next});
-          } else {
-            // One-of-a-kind: remove from catalog
-            tx.delete(ref);
-          }
-        });
-        console.log("[processSquarePayment] Inventory updated for", line.productId, "qty", line.qty);
-      } catch (e) {
-        console.error("[processSquarePayment] Failed to update stock for", line && line.productId, e);
-      }
-    }
+    await adjustInventoryForOrder(parsedItems);
 
     return {
       paymentId: payment.id,
@@ -606,34 +933,82 @@ exports.squareWebhook = onRequest({
       initAdmin();
       const db = getFirestore();
 
-      // Check if order already exists
-      const orderRef = db.collection("orders").doc(payment.id);
-      const orderSnap = await orderRef.get();
+      const orderId = payment.order_id || null;
+      const paymentLinkId = payment.payment_link_id || null;
+      const candidates = Array.from(new Set([
+        orderId,
+        paymentLinkId,
+        payment.id,
+      ].filter(Boolean)));
 
-      if (orderSnap.exists) {
-        console.log("[squareWebhook] Order already processed:", payment.id);
-        res.status(200).send({received: true});
-        return;
+      let orderRef = null;
+      let orderSnap = null;
+      for (const candidate of candidates) {
+        const ref = db.collection("orders").doc(candidate);
+        const snap = await ref.get();
+        if (snap.exists) {
+          orderRef = ref;
+          orderSnap = snap;
+          break;
+        }
+        if (!orderRef) {
+          orderRef = ref;
+          orderSnap = snap;
+        }
+      }
+      if (!orderRef) {
+        orderRef = db.collection("orders").doc(payment.id);
+        orderSnap = await orderRef.get();
       }
 
-      // Create order record
-      const order = {
-        id: payment.id,
+      const existing = orderSnap && orderSnap.exists ? orderSnap.data() : null;
+      const customer = Object.assign({}, existing && existing.customer ? existing.customer : {});
+      if (payment.buyer_email_address) {
+        customer.email = payment.buyer_email_address;
+      }
+
+      const orderUpdate = {
+        id: orderRef.id,
         amount: Number(payment.amount_money.amount),
         currency: payment.amount_money.currency,
         status: payment.status,
-        created: Timestamp.now(),
-        itemsSummary: payment.note || "",
-        customer: {
-          email: payment.buyer_email_address || null,
-        },
+        completed: Timestamp.now(),
+        itemsSummary: payment.note || (existing && existing.itemsSummary) || "",
+        customer,
         squarePaymentId: payment.id,
-        squareOrderId: payment.order_id || null,
-        squareReceiptUrl: payment.receipt_url || null,
+        squareOrderId: payment.order_id || (existing && existing.squareOrderId) || null,
+        squareReceiptUrl: payment.receipt_url || (existing && existing.squareReceiptUrl) || null,
+        paymentLinkId: existing && existing.paymentLinkId ? existing.paymentLinkId : paymentLinkId || null,
       };
 
-      await orderRef.set(order, {merge: true});
-      console.log("[squareWebhook] Order saved:", payment.id);
+      if (!orderSnap || !orderSnap.exists) {
+        orderUpdate.created = Timestamp.now();
+      }
+
+      await orderRef.set(orderUpdate, {merge: true});
+      console.log("[squareWebhook] Order stored/updated:", orderRef.id);
+
+      const storedItems = (existing && Array.isArray(existing.items)) ? existing.items : (() => {
+        try {
+          if (existing && typeof existing.itemsJson === "string") {
+            const parsed = JSON.parse(existing.itemsJson);
+            if (Array.isArray(parsed)) return parsed;
+          }
+          if (payment && payment.order && Array.isArray(payment.order.line_items)) {
+            return payment.order.line_items.map((line) => ({
+              productId: line.note || null,
+              qty: Number(line.quantity) || 0,
+            })).filter((line) => line.productId && line.qty > 0);
+          }
+        } catch {}
+        return [];
+      })();
+
+      const stockAlreadyAdjusted = existing && existing.stockAdjusted;
+      if (!stockAlreadyAdjusted && storedItems.length > 0) {
+        await adjustInventoryForOrder(storedItems);
+        await orderRef.set({stockAdjusted: true}, {merge: true});
+      }
     }
 
     res.status(200).send({received: true});
