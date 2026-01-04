@@ -181,6 +181,22 @@ function isAllowedSquareRedirect(url) {
   return trimmed.startsWith("https://");
 }
 
+function appendParamsToUrl(base, params = {}) {
+  if (typeof base !== "string" || !base.trim()) return "";
+  try {
+    const url = new URL(base.trim());
+    Object.entries(params).forEach(([key, value]) => {
+      if (value == null) return;
+      const stringValue = String(value).trim();
+      if (!stringValue) return;
+      url.searchParams.set(key, stringValue);
+    });
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 function parseCartItemsPayload(rawItems) {
   if (rawItems == null) {
     throw new HttpsError(
@@ -538,21 +554,25 @@ exports.createSquareCheckoutLink = onCall({
     const sanitizedItemsJson = JSON.stringify(cartItems).slice(0, 2000);
     const sanitizedOrigin = sanitizeOriginUrl(origin);
     const originBase = sanitizedOrigin ? sanitizedOrigin.replace(/\/$/, "") : "";
-    const originSuccess = originBase ? `${originBase}/checkout/complete` : "";
-    const originCancel = originBase ? `${originBase}/checkout/cancelled` : "";
-    const envSuccess = process.env.SQUARE_CHECKOUT_SUCCESS_URL || "";
-    const envCancel = process.env.SQUARE_CHECKOUT_CANCEL_URL || "";
-    const successUrl = isAllowedSquareRedirect(originSuccess) ?
-      originSuccess :
-      (isAllowedSquareRedirect(envSuccess) ? envSuccess.trim() : "");
-    const cancelUrl = isAllowedSquareRedirect(originCancel) ?
-      originCancel :
-      (isAllowedSquareRedirect(envCancel) ? envCancel.trim() : "");
+    const originReturn = originBase ? `${originBase}/checkout/return` : "";
+    const envReturn = process.env.SQUARE_CHECKOUT_RETURN_URL || process.env.SQUARE_CHECKOUT_SUCCESS_URL || "";
+    const returnBase = isAllowedSquareRedirect(originReturn) ?
+      originReturn :
+      (isAllowedSquareRedirect(envReturn) ? envReturn.trim() : "");
 
     const base = environment === "production" ?
       "https://connect.squareup.com" :
       "https://connect.squareupsandbox.com";
     const idempotencyKey = crypto.randomUUID();
+    const redirectUrl = returnBase ? appendParamsToUrl(returnBase, {
+      token: idempotencyKey,
+      source: "square",
+    }) : "";
+    const cancelUrl = returnBase ? appendParamsToUrl(returnBase, {
+      token: idempotencyKey,
+      source: "square",
+      state: "cancelled",
+    }) : "";
 
     const canUseDetailedItems = cartDetails.items.every(
         (item) => Number.isInteger(item.unitPrice) && item.unitPrice > 0,
@@ -587,23 +607,23 @@ exports.createSquareCheckoutLink = onCall({
 
     const checkoutOptions = {
       allow_tipping: false,
+      ask_for_shipping_address: true, // Ensure Square collects a shipping address for fulfilment
     };
-    if (successUrl) checkoutOptions.redirect_url = successUrl;
-    if (cancelUrl) checkoutOptions.cancel_url = cancelUrl;
-    if (address || city || postcode || countryCode) {
-      checkoutOptions.ask_for_shipping_address = true;
-    }
+  if (redirectUrl) checkoutOptions.redirect_url = redirectUrl;
+  if (cancelUrl) checkoutOptions.cancel_url = cancelUrl;
 
     const normalizedCountry = typeof countryCode === "string" && countryCode.trim() ? countryCode.trim().toUpperCase() : undefined;
     const prePopulated = {};
     if (userEmail) prePopulated.buyer_email = String(userEmail).trim();
     if (address || city || postcode || normalizedCountry) {
-      prePopulated.buyer_address = {
+      const shippingAddress = {
         address_line_1: address || undefined,
         locality: city || undefined,
         postal_code: postcode || undefined,
         country: normalizedCountry || undefined,
       };
+      prePopulated.buyer_address = shippingAddress;
+      prePopulated.shipping_address = shippingAddress;
     }
 
     const requestBody = {
@@ -677,6 +697,8 @@ exports.createSquareCheckoutLink = onCall({
       environment,
       idempotencyKey,
       quickPay: !canUseDetailedItems,
+      returnUrl: redirectUrl || null,
+      cancelUrl: cancelUrl || null,
       source: "square-payment-link",
     };
 
@@ -687,7 +709,8 @@ exports.createSquareCheckoutLink = onCall({
       paymentLinkId,
       orderId,
       expiresAt: link.expires_at || null,
-      redirectConfigured: Boolean(successUrl),
+      redirectConfigured: Boolean(redirectUrl),
+      returnToken: idempotencyKey,
     };
   } catch (err) {
     console.error("createSquareCheckoutLink error:", err);
@@ -1121,6 +1144,68 @@ exports.squareDiagnostics = onCall({secrets: [squareAccessToken, squareEnvironme
   } catch (err) {
     if (err instanceof HttpsError) throw err;
     throw new HttpsError("internal", "Diagnostics failed", { message: err && err.message });
+  }
+});
+
+exports.getOrderStatus = onCall({}, async (request) => {
+  try {
+    assertAppCheck(request);
+    const {orderId: rawOrderId, token: rawToken} = request.data || {};
+    const orderId = typeof rawOrderId === "string" ? rawOrderId.trim() : "";
+    const token = typeof rawToken === "string" ? rawToken.trim() : "";
+
+    if (!orderId && !token) {
+      throw new HttpsError(
+          "invalid-argument",
+          "Either orderId or token is required to look up an order.",
+      );
+    }
+
+    initAdmin();
+    const db = getFirestore();
+    let docSnap = null;
+
+    if (orderId) {
+      const docRef = db.collection("orders").doc(orderId);
+      const candidate = await docRef.get();
+      if (candidate.exists) {
+        docSnap = candidate;
+      }
+    }
+
+    if (!docSnap && token) {
+      const querySnap = await db.collection("orders")
+          .where("idempotencyKey", "==", token)
+          .limit(1)
+          .get();
+      if (!querySnap.empty) {
+        docSnap = querySnap.docs[0];
+      }
+    }
+
+    if (!docSnap) {
+      return {status: "NOT_FOUND"};
+    }
+
+    const data = docSnap.data() || {};
+    return {
+      orderId: docSnap.id,
+      status: data.status || null,
+      amount: data.amount ?? null,
+      currency: data.currency || null,
+      paymentId: data.squarePaymentId || null,
+      paymentLinkId: data.paymentLinkId || null,
+      squareOrderId: data.squareOrderId || null,
+      receiptUrl: data.squareReceiptUrl || null,
+      environment: data.environment || null,
+      token: data.idempotencyKey || null,
+      createdAt: data.created ? data.created.toDate().toISOString() : null,
+      updatedAt: data.completed ? data.completed.toDate().toISOString() : null,
+    };
+  } catch (err) {
+    console.error("getOrderStatus error:", err);
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", "Failed to load order status", {message: err && err.message});
   }
 });
 
