@@ -148,6 +148,12 @@ export default function Product() {
   const numericStock = typeof product.stock === 'number' ? product.stock : null
   const available = numericStock != null ? numericStock : 1
   const soldOut = numericStock != null ? numericStock <= 0 : false
+  const summaryLine = (() => {
+    const item = product.itemType && product.itemType.trim()
+    const mat = (product.material || product.materials || '').trim()
+    if (item && mat) return `${item} • ${mat}`
+    return item || mat || product.description || ''
+  })()
 
   // Only show customization dropdown if customizable (default true for static products)
   const isCustomizable = product.customizable !== undefined ? product.customizable : true;
@@ -160,7 +166,10 @@ export default function Product() {
       <div>
         <h1 className="h1">{product.name}</h1>
         <div className="price" style={{fontSize:'1.6rem'}}>{formatPrice(price, 'GBP')}</div>
-        <p className="muted">{product.materials || product.description}</p>
+        {summaryLine && <p className="muted">{summaryLine}</p>}
+        {product.description && (
+          <p style={{ marginTop: '0.75rem' }}>{product.description}</p>
+        )}
         <div className="divider" />
 
         {isCustomizable ? (
@@ -228,8 +237,11 @@ export default function Product() {
         <div className="divider" />
         <h3>Details</h3>
         <ul>
-          <li><strong>Materials:</strong> {product.materials || '—'}</li>
-          <li><strong>Craftsmanship:</strong> {product.craftsmanship || '—'}</li>
+          <li><strong>Item type:</strong> {product.itemType || '—'}</li>
+          <li><strong>Material:</strong> {product.material || product.materials || '—'}</li>
+          {product.materials && product.materials !== product.material && (
+            <li><strong>Materials (details):</strong> {product.materials}</li>
+          )}
         </ul>
 
         <div className="divider" />

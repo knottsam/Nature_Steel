@@ -31,7 +31,8 @@ export default function Shop() {
               images: doc.data().images && doc.data().images.length ? doc.data().images : (doc.data().imageUrl ? [doc.data().imageUrl] : []),
               basePricePence: doc.data().price || 0,
               materials: doc.data().materials || '',
-              craftsmanship: doc.data().craftsmanship || '',
+              material: doc.data().material ?? doc.data().materials ?? '',
+              itemType: doc.data().itemType || '',
             }))
             setDbProducts(items)
           } catch (err) {

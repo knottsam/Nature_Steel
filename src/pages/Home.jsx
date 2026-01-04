@@ -66,7 +66,8 @@ export default function Home() {
             images: d.images && d.images.length ? d.images : (d.imageUrl ? [d.imageUrl] : []),
             basePricePence: d.price || 0,
             materials: d.materials || '',
-            craftsmanship: d.craftsmanship || '',
+            material: d.material ?? d.materials ?? '',
+            itemType: d.itemType || '',
           }
         }))
       } catch (err) {
