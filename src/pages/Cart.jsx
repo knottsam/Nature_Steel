@@ -38,15 +38,15 @@ export default function Cart() {
           Removed unavailable items from your cart.
         </div>
       )}
-      <div className="grid" style={{gridTemplateColumns:'1fr .6fr', gap:'2rem'}}>
-        <div className="card">
+      <div className="grid cart-grid">
+        <div className="card cart-items-card">
           {items.map(item => {
             const p = item.product
             const img = p?.images?.[0] || p?.imageUrl || ''
             const name = p?.name || 'Item unavailable'
             return (
-              <div key={item.key} className="row" style={{justifyContent:'space-between', alignItems:'flex-start', opacity: p ? 1 : 0.75}}>
-                <div className="row" style={{alignItems:'center'}}>
+              <div key={item.key} className="cart-item" style={{marginBottom:'1rem', opacity: p ? 1 : 0.75}}>
+                <div className="cart-item-inner row" style={{alignItems:'center'}}>
                   {img ? (
                     <img src={img} alt={name} style={{width:96, height:96, objectFit:'cover'}} />
                   ) : (
@@ -54,13 +54,15 @@ export default function Cart() {
                   )}
                   <div>
                     <div style={{fontWeight:700}}>{name}</div>
-                    <div className="muted" style={{fontSize:'.9rem'}}>
-                      {item.artist ? `Artist: ${item.artist.name}` : 'No Custom Art'}
-                    </div>
+                    {item.artist && (
+                      <div className="muted" style={{fontSize:'.9rem'}}>
+                        Artist: {item.artist.name}
+                      </div>
+                    )}
                     <div className="muted" style={{fontSize:'.9rem'}}>Unit: {formatPrice(item.unitPrice)}</div>
                   </div>
                 </div>
-                <div className="row">
+                <div className="cart-item-controls row" style={{gap:'0.75rem'}}>
                   <input
                     type="number"
                     min="1"
@@ -77,7 +79,7 @@ export default function Cart() {
           })}
         </div>
         <div>
-          <div className="card">
+          <div className="card cart-summary-card">
             <div className="row" style={{justifyContent:'space-between'}}>
               <div>Subtotal</div>
               <div style={{fontWeight:800}}>{formatPrice(subtotal)}</div>

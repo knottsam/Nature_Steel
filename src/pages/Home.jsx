@@ -44,7 +44,6 @@ export default function Home() {
   const activeIndexRef = useRef(0)
   const totalRef = useRef(0)
   const sliderRef = useRef(null)
-  const [isCompactLayout, setIsCompactLayout] = useState(false)
   useEffect(() => {
     async function fetchRecent() {
       setGalleryLoading(true)
@@ -97,28 +96,6 @@ export default function Home() {
     totalRef.current = recent.length
   }, [recent.length])
 
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return
-    }
-    const media = window.matchMedia('(max-width: 520px)')
-    const applyMatch = (mq) => setIsCompactLayout(Boolean(mq.matches))
-    applyMatch(media)
-    const handler = (event) => setIsCompactLayout(Boolean(event.matches))
-    if (typeof media.addEventListener === 'function') {
-      media.addEventListener('change', handler)
-    } else if (typeof media.addListener === 'function') {
-      media.addListener(handler)
-    }
-    return () => {
-      if (typeof media.removeEventListener === 'function') {
-        media.removeEventListener('change', handler)
-      } else if (typeof media.removeListener === 'function') {
-        media.removeListener(handler)
-      }
-    }
-  }, [])
-
   const setActive = useCallback((valueOrUpdater) => {
     setActiveIndex(prev => {
       const total = totalRef.current
@@ -160,16 +137,6 @@ export default function Home() {
     return () => window.clearInterval(id)
   }, [setActive])
   const totalRecent = recent.length
-
-  useEffect(() => {
-    if (!isCompactLayout) return
-    const slider = sliderRef.current
-    if (!slider) return
-  const activeCard = slider.querySelector('[data-gallery-card][data-active="true"]')
-    if (activeCard && typeof activeCard.scrollIntoView === 'function') {
-      activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-    }
-  }, [activeIndex, isCompactLayout])
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh' }}>
@@ -213,15 +180,15 @@ export default function Home() {
 
       <section className="card gallery-section">
         <h2 className="h2">Recent pieces</h2>
-        <div className={`gallery-slider${isCompactLayout ? ' gallery-slider--compact' : ''}`} ref={sliderRef}>
+  <div className="gallery-slider" ref={sliderRef}>
           {recent.map((p, index) => {
             if (!totalRecent) return null
             let offset = index - activeIndex
             const half = Math.floor(totalRecent / 2)
             if (offset > half) offset -= totalRecent
             if (offset < -half) offset += totalRecent
-            const maxVisibleOffset = isCompactLayout ? 0 : 2
-            const isHidden = !isCompactLayout && Math.abs(offset) > maxVisibleOffset
+            const maxVisibleOffset = 2
+            const isHidden = Math.abs(offset) > maxVisibleOffset
             const displayOffset = isHidden
               ? Math.sign(offset) * (maxVisibleOffset + 1)
               : offset
@@ -232,23 +199,15 @@ export default function Home() {
             const elevation = isHidden ? 10 : 100 - absOffset * 10
             const classes = ['gallery-card']
             if (offset === 0) classes.push('is-active')
-            else if (!isCompactLayout && Math.abs(offset) === 1) classes.push('is-near')
-            else if (!isCompactLayout) classes.push('is-far')
-            const cardStyles = isCompactLayout
-              ? {
-                  '--card-offset': 0,
-                  '--card-scale': 1,
-                  '--card-opacity': 1,
-                  '--card-blur': '0px',
-                  '--card-z': offset === 0 ? 2 : 1,
-                }
-              : {
-                  '--card-offset': displayOffset,
-                  '--card-scale': scale,
-                  '--card-opacity': opacity,
-                  '--card-blur': `${blur}px`,
-                  '--card-z': elevation,
-                }
+            else if (Math.abs(offset) === 1) classes.push('is-near')
+            else classes.push('is-far')
+            const cardStyles = {
+              '--card-offset': displayOffset,
+              '--card-scale': scale,
+              '--card-opacity': opacity,
+              '--card-blur': `${blur}px`,
+              '--card-z': elevation,
+            }
             return (
               <Link
                 key={p.id}

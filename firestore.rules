@@ -11,7 +11,7 @@ service cloud.firestore {
     function isValidFurniture() {
       return request.resource.data.keys().hasOnly([
         'name', 'description', 'price', 'images', 'materials', 'material', 'itemType', 'coverImage',
-        'customizable', 'published', 'stock', 'created', 'updated', 'slug', 'imageUrl'
+        'customizable', 'published', 'galleryFeatured', 'stock', 'created', 'updated', 'slug', 'imageUrl'
       ])
       && request.resource.data.name is string
       && request.resource.data.description is string
@@ -25,7 +25,8 @@ service cloud.firestore {
       && (!('imageUrl' in request.resource.data) || request.resource.data.imageUrl is string)
       && (!('stock' in request.resource.data) || request.resource.data.stock is int)
       && (!('customizable' in request.resource.data) || request.resource.data.customizable is bool)
-      && (!('published' in request.resource.data) || request.resource.data.published is bool)
+  && (!('published' in request.resource.data) || request.resource.data.published is bool)
+  && (!('galleryFeatured' in request.resource.data) || request.resource.data.galleryFeatured is bool)
       && (!('updated' in request.resource.data) || request.resource.data.updated is timestamp);
     }
 
