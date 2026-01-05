@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
+import defaultHeroImage from '../assets/images/Skeg.jpg?url'
 
 const BRAND = 'Nature & Steel Bespoke'
 const DEFAULT_TITLE = `${BRAND} | Handcrafted furniture & bespoke art pieces`
 const DEFAULT_DESCRIPTION = 'Handcrafted furniture, bowls, vases, pens, and art-ready pieces. Built to order with bespoke options from Nature & Steel Bespoke.'
-const DEFAULT_IMAGE = '/Skeg.jpg'
+const DEFAULT_IMAGE = defaultHeroImage
 const DEFAULT_KEYWORDS = [
   'Nature & Steel',
   'bespoke furniture',
@@ -19,7 +20,7 @@ const DEFAULT_KEYWORDS = [
   'handmade home decor',
 ]
 const CANONICAL_DOMAIN = 'https://www.natureandsteelbespoke.co.uk'
-const DEFAULT_IMAGE_URL = `${CANONICAL_DOMAIN}${DEFAULT_IMAGE}`
+const DEFAULT_IMAGE_URL = `${CANONICAL_DOMAIN}${DEFAULT_IMAGE.startsWith('/') ? DEFAULT_IMAGE : `/${DEFAULT_IMAGE}`}`
 const ORGANIZATION_ID = `${CANONICAL_DOMAIN}#organization`
 const WEBSITE_ID = `${CANONICAL_DOMAIN}#website`
 

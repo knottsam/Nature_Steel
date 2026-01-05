@@ -5,12 +5,14 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 import { useSiteConfig } from '../context/SiteConfigContext.jsx';
 import { DEFAULT_SITE_VISIBILITY, SITE_VISIBILITY_DOC } from '../config/siteVisibility.js';
+import { GALLERY_LIMIT } from '../utils/gallery.js';
 
 const ALLOWED_ADMINS = [
   'knott.mail8@gmail.com',
   'natureandsteelbespoke@gmail.com',
   // 'anotheradmin@email.com',
 ];
+
 
 export default function Admin() {
   const [user, setUser] = useState(null);
@@ -28,11 +30,14 @@ export default function Admin() {
   const [material, setMaterial] = useState('');
   const [itemType, setItemType] = useState('');
   const [coverImage, setCoverImage] = useState('');
-  const [customizable, setCustomizable] = useState(true);
-  const [published, setPublished] = useState(false);
+  const [customizable, setCustomizable] = useState(false);
+  const [published, setPublished] = useState(true);
+  const [galleryFeatured, setGalleryFeatured] = useState(false);
   const [editId, setEditId] = useState(null);
   const [existingImages, setExistingImages] = useState([]);
   const [imagesToDelete, setImagesToDelete] = useState([]);
+  const [galleryCount, setGalleryCount] = useState(0);
+  const [editingWasGalleryFeatured, setEditingWasGalleryFeatured] = useState(false);
   // Admin mode: 'orders' or 'inventory'
   const [mode, setMode] = useState('orders');
   // Orders state
@@ -98,6 +103,18 @@ export default function Admin() {
     if (user && mode === 'orders') fetchOrders();
   }, [user, mode, success]);
 
+  React.useEffect(() => {
+    if (!user || mode !== 'inventory') return;
+    const featuredCount = items.filter(item => item.galleryFeatured === true).length;
+    setGalleryCount(featuredCount);
+  }, [user, mode, items]);
+
+  React.useEffect(() => {
+    if (editId) return;
+    setGalleryFeatured(false);
+    setEditingWasGalleryFeatured(false);
+  }, [galleryCount, editId]);
+
   const handleGoogleLogin = async () => {
     setAuthError('');
     try {
@@ -141,6 +158,9 @@ export default function Admin() {
     setCoverImage(initialCover);
     setCustomizable(item.customizable !== undefined ? item.customizable : true);
     setPublished(!!item.published);
+    const isGalleryFeatured = item.galleryFeatured === true;
+    setGalleryFeatured(isGalleryFeatured);
+    setEditingWasGalleryFeatured(isGalleryFeatured);
   };
 
   // Remove an existing image from the list and mark for deletion
@@ -160,6 +180,7 @@ export default function Admin() {
     setUploading(true);
     setError('');
     setSuccess(false);
+    const wasGalleryFeatured = editingWasGalleryFeatured;
     try {
       let imageUrls = [...existingImages];
       if (images.length > 0) {
@@ -218,16 +239,21 @@ export default function Admin() {
         throw new Error('Item type is required.');
       }
 
+      if (galleryFeatured && !wasGalleryFeatured && galleryCount >= GALLERY_LIMIT) {
+        throw new Error(`Gallery is full (${galleryCount}/${GALLERY_LIMIT}). Unfeature another piece before adding this one.`);
+      }
+
       const data = {
         name: name.trim(),
         description: description.trim(),
         price: pricePence,
-  images: orderedImages,
+        images: orderedImages,
         materials: normalizedMaterials,
         material: normalizedMaterial,
         itemType: normalizedItemType,
         customizable,
         published,
+        galleryFeatured,
         created: editId ? undefined : Timestamp.now(),
       };
       if (finalCoverImage) {
@@ -238,6 +264,7 @@ export default function Admin() {
           delete data[key];
         }
       });
+      let nextGalleryCount = galleryCount;
       if (editId) {
         // Remove undefined fields
         console.log('[Admin] Updating doc:', editId);
@@ -249,10 +276,21 @@ export default function Admin() {
         });
         console.log('[Admin] Update succeeded');
         setEditId(null);
+        if (wasGalleryFeatured && !galleryFeatured) {
+          nextGalleryCount = Math.max(0, nextGalleryCount - 1);
+        } else if (!wasGalleryFeatured && galleryFeatured) {
+          nextGalleryCount = Math.min(GALLERY_LIMIT, nextGalleryCount + 1);
+        }
       } else {
         console.log('[Admin] Creating new doc with data:', data);
         const docRef = await addDoc(collection(db, 'furniture'), data);
         console.log('[Admin] Doc created with ID:', docRef.id);
+        if (galleryFeatured) {
+          nextGalleryCount = Math.min(GALLERY_LIMIT, nextGalleryCount + 1);
+        }
+      }
+      if (nextGalleryCount !== galleryCount) {
+        setGalleryCount(nextGalleryCount);
       }
       setSuccess(true);
       setName('');
@@ -264,9 +302,11 @@ export default function Admin() {
       setMaterials('');
       setMaterial('');
       setItemType('');
-  setCoverImage('');
+      setCoverImage('');
       setCustomizable(true);
       setPublished(false);
+  setGalleryFeatured(false);
+      setEditingWasGalleryFeatured(false);
     } catch (err) {
       console.error('[Admin] handleSubmit error:', err);
       const msg = err?.message || 'Unknown error';
@@ -307,6 +347,9 @@ export default function Admin() {
         }
       }
       setItems(items => items.filter(item => item.id !== id));
+      if (item && item.galleryFeatured === true) {
+        setGalleryCount(prev => Math.max(0, prev - 1));
+      }
     } catch (err) {
       setError('Delete failed: ' + err.message);
     }
@@ -354,7 +397,7 @@ export default function Admin() {
       <div style={{ maxWidth: 400, margin: '2rem auto', color: 'red' }}>
         <h2>Access Denied</h2>
         <p>This Google account is not authorized for admin access.</p>
-        <button onClick={handleLogout}>Sign Out</button>
+        <button type="button" onClick={handleLogout} className="btn ghost btn-compact">Sign Out</button>
       </div>
     );
   }
@@ -363,20 +406,33 @@ export default function Admin() {
     return (
       <div style={{ maxWidth: 400, margin: '2rem auto' }}>
         <h2>Admin Login</h2>
-        <button onClick={handleGoogleLogin} style={{ width: '100%', marginBottom: 8 }}>Sign in with Google</button>
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          className="btn block"
+          style={{ marginBottom: 8 }}
+        >
+          Sign in with Google
+        </button>
         {authError && <div style={{ color: 'red', marginTop: 8 }}>{authError}</div>}
       </div>
     );
   }
+
+  const galleryFull = galleryCount >= GALLERY_LIMIT;
+  const galleryCheckboxDisabled = galleryFull && !editingWasGalleryFeatured;
+  const galleryWarningActive = galleryCheckboxDisabled;
+  const galleryStatusText = `${galleryCount}/${GALLERY_LIMIT} gallery slots used`;
+  const galleryWarningText = `Gallery is full (${galleryCount}/${GALLERY_LIMIT}). Unfeature another piece before adding another.`;
 
   return (
     <>
       <div style={{ maxWidth: 800, margin: '2rem auto' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>Admin</h2>
-          <button onClick={handleLogout}>Sign Out</button>
+          <button type="button" onClick={handleLogout} className="btn ghost btn-compact">Sign Out</button>
         </div>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16 }}>
+        <div className="admin-mode-buttons">
           {[
             { key: 'orders', label: 'Check orders' },
             { key: 'inventory', label: 'Update stock' },
@@ -384,15 +440,9 @@ export default function Admin() {
           ].map(option => (
             <button
               key={option.key}
+              type="button"
               onClick={() => setMode(option.key)}
-              className={mode === option.key ? 'btn' : ''}
-              style={{
-                padding:'8px 12px',
-                borderRadius:8,
-                border:'1px solid var(--border)',
-                background: mode===option.key ? 'var(--primary)' : 'var(--surface)',
-                color: mode===option.key ? 'white' : 'var(--text)',
-              }}
+              className={`btn admin-mode-button ${mode === option.key ? 'is-active' : 'ghost'}`}
             >
               {option.label}
             </button>
@@ -408,7 +458,7 @@ export default function Admin() {
       )}
 
       {mode === 'inventory' && (
-        <div style={{ maxWidth: 650, margin: '2rem auto' }}>
+  <div style={{ width: '100%', maxWidth: 'min(1100px, 96vw)', margin: '2rem auto' }}>
           <h2>{editId ? 'Edit' : 'Add New'} Item</h2>
           <div style={{
             border: '1px solid var(--border)',
@@ -419,78 +469,84 @@ export default function Admin() {
           }}>
             <div style={{fontSize: 13, color: 'var(--muted)'}}>Signed in as</div>
             <div style={{fontWeight: 600}}>{user?.email || '—'}</div>
-            <div style={{fontSize: 13}}>UID: <code>{user?.uid || '—'}</code></div>
-            <div style={{fontSize: 13}}>Email verified: {String(!!user?.emailVerified)}</div>
-            <button type="button" onClick={() => { navigator.clipboard?.writeText(user?.uid || ''); }} style={{marginTop: 6}}>Copy UID</button>
-            <div style={{fontSize: 12, color:'#b45309', marginTop: 6}}>
-              If you can't see items or save changes, add this UID to Firestore/Storage rules or use an admins collection.
-            </div>
           </div>
           <form onSubmit={handleSubmit}>
-            <input
-              type="text"
-              placeholder="Name"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              required
-              style={{ width: '100%', marginBottom: 8 }}
-            />
-            <textarea
-              placeholder="Description"
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              required
-              style={{ width: '100%', marginBottom: 8 }}
-            />
-            <input
-              type="text"
-              placeholder="Material (e.g. Walnut, Mild Steel)"
-              value={material}
-              onChange={e => setMaterial(e.target.value)}
-              required
-              style={{ width: '100%', marginBottom: 8 }}
-            />
-            <input
-              type="text"
-              placeholder="Item type (e.g. Bowl, Pen, Clock)"
-              value={itemType}
-              onChange={e => setItemType(e.target.value)}
-              required
-              style={{ width: '100%', marginBottom: 8 }}
-            />
-            <input
-              type="text"
-              placeholder="Materials (detailed notes)"
-              value={materials}
-              onChange={e => setMaterials(e.target.value)}
-              style={{ width: '100%', marginBottom: 8 }}
-            />
-            <input
-              type="number"
-              placeholder="Price (£)"
-              value={price}
-              onChange={e => setPrice(e.target.value)}
-              required
-              style={{ width: '100%', marginBottom: 8 }}
-            />
-            <label style={{ display: 'block', marginBottom: 8 }}>
+            <div className="admin-form-grid">
               <input
-                type="checkbox"
-                checked={customizable}
-                onChange={e => setCustomizable(e.target.checked)}
-                style={{ marginRight: 8 }}
+                type="text"
+                placeholder="Name"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                required
               />
-              Customizable (allow custom art/artist selection)
-            </label>
-            <label style={{ display: 'block', marginBottom: 8 }}>
               <input
-                type="checkbox"
-                checked={published}
-                onChange={e => setPublished(e.target.checked)}
-                style={{ marginRight: 8 }}
+                type="number"
+                placeholder="Price (£)"
+                value={price}
+                onChange={e => setPrice(e.target.value)}
+                required
               />
-              Published (visible in the shop)
-            </label>
+              <input
+                type="text"
+                placeholder="Item type (e.g. Bowl, Pen, Clock)"
+                value={itemType}
+                onChange={e => setItemType(e.target.value)}
+                required
+              />
+              <input
+                type="text"
+                placeholder="Material (e.g. Walnut, Mild Steel)"
+                value={material}
+                onChange={e => setMaterial(e.target.value)}
+                required
+              />
+              <div className="admin-materials-row field-full">
+                <input
+                  type="text"
+                  placeholder="Materials (detailed notes)"
+                  value={materials}
+                  onChange={e => setMaterials(e.target.value)}
+                />
+                <div className="admin-checkbox-group">
+                  <label className="admin-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={customizable}
+                      onChange={e => setCustomizable(e.target.checked)}
+                    />
+                    <span className="admin-checkbox__text">Customizable</span>
+                  </label>
+                  <label className={`admin-checkbox${galleryCheckboxDisabled ? ' is-disabled' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={galleryFeatured}
+                      disabled={galleryCheckboxDisabled}
+                      onChange={e => setGalleryFeatured(e.target.checked)}
+                    />
+                    <span className="admin-checkbox__text">In Gallery</span>
+                  </label>
+                  <label className="admin-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={published}
+                      onChange={e => setPublished(e.target.checked)}
+                    />
+                    <span className="admin-checkbox__text">Published</span>
+                  </label>
+                </div>
+              </div>
+              <div className={`admin-gallery-note field-full${galleryWarningActive ? ' is-error' : ''}`}>
+                {galleryWarningActive ? galleryWarningText : galleryStatusText}
+              </div>
+              <textarea
+                placeholder="Description"
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                required
+                className="field-full"
+                rows={4}
+              />
+            </div>
             {existingImages.length > 0 && (
               <div style={{ marginBottom: 8 }}>
                 <strong>Existing images:</strong>
@@ -503,11 +559,22 @@ export default function Admin() {
                         {isCover ? (
                           <span className="badge-wood">Cover</span>
                         ) : (
-                          <button type="button" onClick={() => setCoverImage(url)} style={{ marginRight: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => setCoverImage(url)}
+                            className="btn ghost btn-xs"
+                            style={{ marginRight: 4 }}
+                          >
                             Set as cover
                           </button>
                         )}
-                        <button type="button" onClick={() => handleRemoveExistingImage(url)} style={{ color: 'red' }}>Remove</button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveExistingImage(url)}
+                          className="btn danger btn-xs"
+                        >
+                          Remove
+                        </button>
                       </li>
                     );
                   })}
@@ -529,11 +596,13 @@ export default function Admin() {
                 </ul>
               </div>
             )}
-            <button type="submit" disabled={uploading} style={{ width: '100%' }}>
+            <button type="submit" disabled={uploading} className="btn block">
               {uploading ? (editId ? 'Saving...' : 'Uploading...') : (editId ? 'Save Changes' : 'Add Item')}
             </button>
             {editId && (
-              <button type="button" onClick={() => {
+              <button
+                type="button"
+                onClick={() => {
                 setEditId(null);
                 setName('');
                 setDescription('');
@@ -545,7 +614,14 @@ export default function Admin() {
                 setItemType('');
                 setCoverImage('');
                 setCustomizable(true);
-              }} style={{ width: '100%', marginTop: 8 }}>Cancel Edit</button>
+                setGalleryFeatured(false);
+                setEditingWasGalleryFeatured(false);
+                }}
+                className="btn ghost block"
+                style={{ marginTop: 8 }}
+              >
+                Cancel Edit
+              </button>
             )}
           </form>
           {success && <div style={{ color: 'green', marginTop: 8 }}>Upload successful!</div>}
@@ -555,7 +631,7 @@ export default function Admin() {
           {loading ? <div>Loading...</div> : (
             <div className="admin-items-grid">
               {items.map(item => (
-                <div key={item.id} style={{
+                <div key={item.id} className="admin-item-card" style={{
                   border: '1px solid #353634',
                   borderRadius: 12,
                   padding: 16,
@@ -564,7 +640,14 @@ export default function Admin() {
                   minHeight: 180,
                 }}>
                   <strong>{item.name}</strong><br />
-                  {item.images && item.images[0] && <img src={item.images[0]} alt={item.name} style={{ maxWidth: '100%', maxHeight: 100, borderRadius: 8, margin: '8px 0' }} />}<br />
+                  {item.images && item.images[0] && (
+                    <img
+                      src={item.images[0]}
+                      alt={item.name}
+                      className="admin-item-card__image"
+                    />
+                  )}
+                  <br />
                   <div style={{ fontSize: 13, color: 'var(--muted)' }}>
                     <div><strong>Material:</strong> {item.material || item.materials || '—'}</div>
                     <div><strong>Item type:</strong> {item.itemType || '—'}</div>
@@ -576,16 +659,35 @@ export default function Admin() {
                       const v = parseInt(e.target.value || '0', 10);
                       setItems(prev => prev.map(it => it.id === item.id ? { ...it, stock: v } : it));
                     }} style={{ width:80 }} />
-                    <button onClick={async () => {
+                    <button
+                      type="button"
+                      className="btn btn-xs ghost"
+                      onClick={async () => {
                       try {
                         await updateDoc(doc(db, 'furniture', item.id), { stock: Number(item.stock ?? 0) });
                       } catch (err) {
                         alert('Failed to save stock: ' + (err?.message || 'unknown'))
                       }
-                    }}>Save</button>
+                      }}
+                    >
+                      Save
+                    </button>
                   </div>
-                  <button onClick={() => handleEdit(item)} style={{ marginRight: 8, marginBottom: 6 }}>Edit</button>
-                  <button onClick={() => handleDelete(item.id)} style={{ color: 'red', marginTop: 0 }}>Delete</button>
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(item)}
+                    className="btn ghost btn-xs"
+                    style={{ marginRight: 8, marginBottom: 6 }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(item.id)}
+                    className="btn danger btn-xs"
+                  >
+                    Delete
+                  </button>
                 </div>
               ))}
             </div>
@@ -594,7 +696,7 @@ export default function Admin() {
       )}
 
       {mode === 'site' && (
-        <div style={{ maxWidth: 650, margin: '2rem auto' }}>
+  <div style={{ width: '100%', maxWidth: 'min(1100px, 96vw)', margin: '2rem auto' }}>
           <section className="card" style={{ marginBottom: 16 }}>
             <h3 className="h3">Site visibility controls</h3>
             <p className="muted" style={{ marginTop: 0 }}>Toggle the artists directory and artist profiles without redeploying.</p>
@@ -609,12 +711,8 @@ export default function Admin() {
                     type="button"
                     onClick={() => handleVisibilityToggle(flag)}
                     disabled={siteConfigLoading || loadingFlag}
-                    className="btn"
-                    style={{
-                      alignSelf: 'flex-start',
-                      opacity: siteConfigLoading ? 0.6 : 1,
-                      pointerEvents: siteConfigLoading ? 'none' : undefined,
-                    }}
+                    className="btn btn-compact"
+                    style={{ alignSelf: 'flex-start' }}
                   >
                     {loadingFlag
                       ? 'Updating…'
@@ -682,7 +780,14 @@ function OrdersTable({ orders, loading, error }) {
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
         <div style={{fontSize:12, color:'var(--muted)'}}>Total: {orders.length}</div>
-        <button onClick={exportCsv} disabled={downloading}>Export CSV</button>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={downloading}
+          className="btn ghost btn-compact"
+        >
+          Export CSV
+        </button>
       </div>
       <div style={{ overflowX:'auto' }}>
         <table style={{ width:'100%', borderCollapse:'collapse' }}>

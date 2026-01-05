@@ -17,24 +17,19 @@ export default function ProductCard({ product }) {
     return item || mat || ''
   })()
   return (
-    <div className="card">
-      <Link to={`/product/${product.slug}`}>
-        <div style={{position:'relative'}}>
-          {heroImage && <img src={heroImage} alt={product.name} />}
-          {soldOut && (
-            <div style={{position:'absolute', top:8, left:8, background:'rgba(0,0,0,0.65)', color:'#fff', padding:'4px 8px', borderRadius:6, fontSize:12}}>Sold out</div>
-          )}
-        </div>
+    <article className="card product-card">
+      <Link to={`/product/${product.slug}`} className="product-card__media">
+        {heroImage && <img src={heroImage} alt={product.name} />}
+        {soldOut && <span className="product-card__badge">Sold out</span>}
       </Link>
-      <div style={{paddingTop: '.75rem'}}>
-        <div className="row" style={{justifyContent:'space-between'}}>
-          <h3 style={{margin:0}}>{product.name}</h3>
+      <div className="product-card__body">
+        <div className="row product-card__header">
+          <h3 className="product-card__title">{product.name}</h3>
           <div className="price">{formatPrice(price)}</div>
         </div>
-        {subtitle && <p className="muted" style={{marginTop:'.4rem'}}>{subtitle}</p>}
-        <div className="spacer" />
-        <Link className="btn block" to={`/product/${product.slug}`}>View</Link>
+        {subtitle && <p className="muted product-card__subtitle">{subtitle}</p>}
+        <Link className="btn block product-card__cta" to={`/product/${product.slug}`}>View</Link>
       </div>
-    </div>
+    </article>
   )
 }

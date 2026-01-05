@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import Skeg from '../../Skeg.jpg'
+import Skeg from '../assets/images/Skeg.jpg'
 import { Link } from 'react-router-dom'
 import SEO from '../components/SEO.jsx'
 import { db } from '../firebase'
 import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore'
+import { GALLERY_LIMIT } from '../utils/gallery.js'
 
 const FEATURE_HIGHLIGHTS = [
   {
@@ -49,15 +50,16 @@ export default function Home() {
       setGalleryLoading(true)
       setGalleryError('')
       try {
-        // Get up to 8 most recent published pieces from Firestore
+    const fetchLimit = Math.max(GALLERY_LIMIT * 3, GALLERY_LIMIT)
+    // Fetch recent published pieces, then keep the items marked for the homepage gallery
         const q = query(
           collection(db, 'furniture'),
           where('published', '==', true),
           orderBy('created', 'desc'),
-          limit(8)
+          limit(fetchLimit)
         )
         const snap = await getDocs(q)
-        setRecent(snap.docs.map(doc => {
+        const featured = snap.docs.map(doc => {
           const d = doc.data()
           const gallery = Array.isArray(d.images)
             ? d.images.map((img) => (typeof img === 'string' ? img.trim() : '')).filter(Boolean)
@@ -79,7 +81,8 @@ export default function Home() {
             itemType: d.itemType || '',
             coverImage: cover,
           }
-        }))
+        }).filter(item => item.galleryFeatured === true).slice(0, GALLERY_LIMIT)
+        setRecent(featured)
       } catch (err) {
         console.error('[Home] fetchRecent failed', err)
         setGalleryError(err?.message || 'Unable to load the latest pieces.')

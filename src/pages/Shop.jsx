@@ -4,7 +4,7 @@ import { db, configHealth } from '../firebase'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { products as demoProducts } from '../data/products.js'
 
-const PAGE_SIZE = 12
+const PAGE_SIZE = 9 // Number of products per page
 
 export default function Shop() {
   const demoEnabled = import.meta.env.VITE_ENABLE_DEMO_PRODUCTS === '1'
