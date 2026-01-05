@@ -1,6 +1,7 @@
 // Square Payment Processing Functions
 const {onCall, onRequest, HttpsError} = require("firebase-functions/v2/https");
 const {defineSecret} = require("firebase-functions/params");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 // Using direct HTTPS calls to Square to avoid SDK auth inconsistencies
 const crypto = require("crypto");
 const fs = require("fs");
@@ -1234,6 +1235,29 @@ exports.getOrderStatus = onCall({}, async (request) => {
     console.error("getOrderStatus error:", err);
     if (err instanceof HttpsError) throw err;
     throw new HttpsError("internal", "Failed to load order status", {message: err && err.message});
+  }
+});
+
+exports.cleanupPendingOrders = onSchedule("every 24 hours", async () => {
+  try {
+    initAdmin();
+    const db = getFirestore();
+    const cutoff = Timestamp.fromMillis(Date.now() - 48 * 60 * 60 * 1000);
+    const snapshot = await db.collection("orders")
+      .where("status", "==", "PENDING")
+      .where("created", "<", cutoff)
+      .limit(200)
+      .get();
+    if (snapshot.empty) {
+      console.log("[cleanupPendingOrders] nothing to remove");
+      return;
+    }
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    console.log(`[cleanupPendingOrders] deleted ${snapshot.size} pending orders older than 48h`);
+  } catch (err) {
+    console.error("[cleanupPendingOrders] error:", err);
   }
 });
 

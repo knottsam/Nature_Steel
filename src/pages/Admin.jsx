@@ -730,6 +730,17 @@ export default function Admin() {
   );
 }
 
+function formatOrderDate(value) {
+  if (!value) return '';
+  const date = value.toDate ? value.toDate() : (value instanceof Date ? value : new Date(value));
+  if (!date || Number.isNaN(date.getTime())) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const time = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return `${day}/${month}/${year} ${time}`;
+}
+
 function OrdersTable({ orders, loading, error }) {
   const [downloading, setDownloading] = useState(false);
 
@@ -740,11 +751,11 @@ function OrdersTable({ orders, loading, error }) {
         'id','amount','currency','status','created','customer.name','customer.email','customer.address','customer.city','customer.postcode','customer.countryCode','receiptUrl'
       ];
       const rows = orders.map(o => [
-        o.id,
-        o.amount,
-        o.currency,
-        o.status,
-        o.created && o.created.toDate ? o.created.toDate().toISOString() : '',
+  o.id,
+  o.amount,
+  o.currency,
+  o.status,
+  formatOrderDate(o.created),
         o.customer?.name || '',
         o.customer?.email || '',
         o.customer?.address || '',
@@ -805,7 +816,7 @@ function OrdersTable({ orders, loading, error }) {
           <tbody>
             {orders.map(o => (
               <tr key={o.id} style={{ borderBottom:'1px solid var(--border)' }}>
-                <td>{o.created && o.created.toDate ? o.created.toDate().toLocaleString() : ''}</td>
+                <td>{formatOrderDate(o.created)}</td>
                 <td>{o.status}</td>
                 <td>{typeof o.amount === 'number' ? `£${(o.amount/100).toFixed(2)}` : ''} {o.currency}</td>
                 <td>{o.customer?.name || '—'}</td>
