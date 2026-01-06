@@ -22,7 +22,7 @@ export default function Footer() {
             <div className="h3">Company</div>
             <ul className="footer-links">
               <li><Link to="/about">About Us</Link></li>
-              <li><Link to="/contact">Contact</Link></li>
+              <li><Link to="/projects">Projects</Link></li>
             </ul>
           </div>
           <div className="footer-social">

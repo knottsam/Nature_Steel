@@ -39,7 +39,7 @@ export default function NavBar() {
           {showArtistsLink && <NavLink to="/artists" onClick={handleLinkClick}>Artists</NavLink>}
           <NavLink to="/about" onClick={handleLinkClick}>About Us</NavLink>
           <NavLink to="/faq" onClick={handleLinkClick}>FAQ</NavLink>
-          <NavLink to="/contact" onClick={handleLinkClick}>Contact</NavLink>
+          <NavLink to="/projects" onClick={handleLinkClick}>Projects</NavLink>
           <NavLink to="/cart" className="nav-cart" onClick={handleLinkClick}>Cart ({totalQuantity})</NavLink>
           {/* <NavLink to="/admin">Admin</NavLink> */}
         </div>

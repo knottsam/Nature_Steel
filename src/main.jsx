@@ -12,7 +12,7 @@ const Artists = lazy(() => import('./pages/Artists.jsx'))
 const Artist = lazy(() => import('./pages/Artist.jsx'))
 const FAQ = lazy(() => import('./pages/FAQ.jsx'))
 const About = lazy(() => import('./pages/About.jsx'))
-const Contact = lazy(() => import('./pages/Contact.jsx'))
+const Projects = lazy(() => import('./pages/Projects.jsx'))
 const Cart = lazy(() => import('./pages/Cart.jsx'))
 const Checkout = lazy(() => import('./pages/Checkout.jsx'))
 const Admin = lazy(() => import('./pages/Admin.jsx'))
@@ -32,7 +32,7 @@ const router = createBrowserRouter([
       { path: 'artists/:slug', element: <Artist /> },
       { path: 'faq', element: <FAQ /> },
       { path: 'about', element: <About /> },
-      { path: 'contact', element: <Contact /> },
+      { path: 'projects', element: <Projects /> },
       { path: 'cart', element: <Cart /> },
       { path: 'checkout', element: <Checkout /> },
     { path: 'checkout/complete', element: <CheckoutComplete /> },

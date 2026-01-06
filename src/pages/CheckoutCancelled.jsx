@@ -28,7 +28,7 @@ export default function CheckoutCancelled() {
 
       <div className='row' style={{ gap: '1rem', flexWrap: 'wrap' }}>
         <Link to='/cart' className='btn'>Return to cart</Link>
-        <Link to='/contact' className='btn secondary'>Need help?</Link>
+        <Link to='/projects' className='btn secondary'>Projects</Link>
       </div>
     </div>
   )
