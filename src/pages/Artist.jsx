@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { artists } from '../data/artists.js'
 import { useSiteConfig } from '../context/SiteConfigContext.jsx'
+import SEO from '../components/SEO.jsx'
 
 export default function Artist() {
   const { slug } = useParams()
@@ -28,7 +29,13 @@ export default function Artist() {
   }
 
   return (
-    <div>
+    <>
+      <SEO
+        title={`${artist.name} | Artist | Nature & Steel Bespoke`}
+        description={`Meet ${artist.name}, one of our talented artists. ${artist.bio || 'Specializing in bespoke custom art for furniture pieces.'}`}
+        image={artist.thumbnail}
+      />
+      <div>
       <div className="grid" style={{gridTemplateColumns:'1.125fr 3fr 2fr', gap:'2rem', alignItems: 'stretch'}}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <img 
@@ -145,5 +152,6 @@ export default function Artist() {
         </div>
       </div>
     </div>
+    </>
   )
 }

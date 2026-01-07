@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { db } from '../firebase'
 import { collection, getDocs, query, orderBy } from 'firebase/firestore'
+import SEO from '../components/SEO.jsx'
 
 export default function Projects() {
   const [selectedProject, setSelectedProject] = useState(null)
@@ -65,7 +66,12 @@ export default function Projects() {
   }
 
   return (
-    <div>
+    <>
+      <SEO
+        title="Projects Gallery | Nature & Steel Bespoke"
+        description="View our gallery of recent commissions, collaborations, and bespoke furniture projects. See examples of our handcrafted work."
+      />
+      <div>
       <h1 className="h1">Projects</h1>
       <p className="muted">
         Explore the gallery of recent commissions, collaborations, and pop-up shows. For custom work, reach out anytime at{' '}
@@ -141,5 +147,6 @@ export default function Projects() {
         </div>
       )}
     </div>
+    </>
   )
 }

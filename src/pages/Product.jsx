@@ -6,6 +6,24 @@ import { priceForProduct } from '../utils/pricing.js'
 import { formatPrice } from '../utils/currency.js'
 import { SITE_SETTINGS } from '../data/siteSettings.js'
 import { useCart } from '../context/CartContext.jsx'
+import SEO from '../components/SEO.jsx'
+
+const BRAND = 'Nature & Steel Bespoke'
+const DEFAULT_DESCRIPTION = 'Handcrafted furniture, bowls, vases, pens, and art-ready pieces. Built to order with bespoke options from Nature & Steel Bespoke.'
+const DEFAULT_KEYWORDS = [
+  'Nature & Steel',
+  'bespoke furniture',
+  'handcrafted furniture',
+  'bowls',
+  'vases',
+  'pens',
+  'handmade pens',
+  'handmade furniture',
+  'handmade bowls',
+  'handmade vases',
+  'custom art furniture',
+  'handmade home decor',
+]
 
 function ImageCarousel({ images }) {
   const [index, setIndex] = useState(0)
@@ -175,7 +193,14 @@ export default function Product() {
   const isCustomizable = product.customizable !== undefined ? product.customizable : true;
 
   return (
-    <div className="grid" style={{gridTemplateColumns:'1.1fr 1fr', gap:'2rem'}}>
+    <>
+      <SEO
+        title={`${product.name} | ${BRAND}`}
+        description={summaryLine || product.description || DEFAULT_DESCRIPTION}
+        image={images[0]}
+        keywords={[...DEFAULT_KEYWORDS, product.material, product.itemType].filter(Boolean)}
+      />
+      <div className="grid" style={{gridTemplateColumns:'1.1fr 1fr', gap:'2rem'}}>
       <div className="grid" style={{gap:'1rem'}}>
         <ImageCarousel images={images} />
       </div>
@@ -269,5 +294,6 @@ export default function Product() {
         )}
       </div>
     </div>
+    </>
   )
 }

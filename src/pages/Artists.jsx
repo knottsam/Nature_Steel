@@ -2,6 +2,7 @@ import React from 'react'
 import { artists } from '../data/artists.js'
 import ArtistCard from '../components/ArtistCard.jsx'
 import { useSiteConfig } from '../context/SiteConfigContext.jsx'
+import SEO from '../components/SEO.jsx'
 
 export default function Artists() {
   const { config, loading } = useSiteConfig()
@@ -14,7 +15,12 @@ export default function Artists() {
     )
   }
   return (
-    <div>
+    <>
+      <SEO
+        title="Artists | Nature & Steel Bespoke"
+        description="Meet our talented artists who create bespoke custom art for your furniture pieces. Each artist brings a unique style and palette."
+      />
+      <div>
       <h1 className="h1">The Artists</h1>
       <p className="muted">Each artist brings a distinct hand-style and palette. Choose your collaborator.</p>
       <div className="spacer" />
@@ -22,5 +28,6 @@ export default function Artists() {
         {artists.map(a => <ArtistCard key={a.id} artist={a} />)}
       </div>
     </div>
+    </>
   )
 }

@@ -3,6 +3,7 @@ import ProductCard from '../components/ProductCard.jsx'
 import { db, configHealth } from '../firebase'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { products as demoProducts } from '../data/products.js'
+import SEO from '../components/SEO.jsx'
 
 const PAGE_SIZE = 9 // Number of products per page
 
@@ -184,7 +185,12 @@ export default function Shop() {
   }
 
   return (
-    <div>
+    <>
+      <SEO
+        title="Shop Handcrafted Furniture | Nature & Steel Bespoke"
+        description="Browse our collection of handcrafted furniture, bowls, vases, pens, and bespoke art pieces. Built to order with customization options."
+      />
+      <div>
       <h1 className="h1">Nature & Steel Bespoke Collection</h1>
       <p className="muted">Fine core pieces. Built to order. Choose customization if you want it.</p>
       <div className="spacer" />
@@ -299,5 +305,6 @@ export default function Shop() {
         </section>
       </div>
     </div>
+    </>
   )
 }

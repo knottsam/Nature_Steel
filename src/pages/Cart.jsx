@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCart } from '../context/CartContext.jsx'
 import { formatPrice } from '../utils/currency.js'
+import SEO from '../components/SEO.jsx'
 
 export default function Cart() {
   const { items, subtotal, removeFromCart, updateQty, cleanupTick } = useCart()
@@ -23,7 +24,12 @@ export default function Cart() {
     )
   }
   return (
-    <div>
+    <>
+      <SEO
+        title="Shopping Cart | Nature & Steel Bespoke"
+        description="Review your cart and proceed to checkout for your custom handcrafted furniture pieces."
+      />
+      <div>
       <h1 className="h1">Your cart</h1>
       {showCleanup && (
         <div style={{
@@ -90,5 +96,6 @@ export default function Cart() {
         </div>
       </div>
     </div>
+    </>
   )
 }

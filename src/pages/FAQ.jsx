@@ -1,9 +1,15 @@
 import React from 'react'
 import { SITE_SETTINGS } from '../data/siteSettings.js'
+import SEO from '../components/SEO.jsx'
 
 export default function FAQ() {
   return (
-    <div>
+    <>
+      <SEO
+        title="FAQ & Process | Nature & Steel Bespoke"
+        description="Frequently asked questions about our handcrafted furniture process, lead times, customization, and ordering information."
+      />
+      <div>
       <h1 className="h1">FAQ & Process</h1>
       <h2 className="h2">Process</h2>
       <ol>
@@ -31,5 +37,6 @@ export default function FAQ() {
       <h3>How do I reapply the finish?</h3>
       <p>Reapply natural oil or wax finishes as needed, typically every 6-12 months, depending on use and exposure.</p>
     </div>
+    </>
   )
 }
