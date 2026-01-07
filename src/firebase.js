@@ -36,9 +36,17 @@ if (!configHealth.ok) {
   if (!import.meta.env.VITE_FIREBASE_PROJECT_ID) {
     console.error('[firebase] VITE_FIREBASE_PROJECT_ID is undefined. Firestore real-time listeners will fail with projects/undefined.');
   }
+} else {
+  console.log('[firebase] Config health OK, projectId:', configHealth.projectId);
 }
 
-export const app = initializeApp(firebaseConfig);
+try {
+  export const app = initializeApp(firebaseConfig);
+  console.log('[firebase] Firebase app initialized successfully');
+} catch (error) {
+  console.error('[firebase] Failed to initialize Firebase app:', error);
+  throw error;
+}
 // Optional App Check: requires VITE_FIREBASE_APPCHECK_KEY (reCAPTCHA v3 site key)
 const appCheckKey = import.meta.env.VITE_FIREBASE_APPCHECK_KEY;
 if (appCheckKey) {
@@ -58,7 +66,7 @@ export const storage = getStorage(app);
 // Prefer a custom Functions domain if provided (great when Firebase web config isn't set locally)
 const customDomain = import.meta.env.VITE_FIREBASE_FUNCTIONS_CUSTOM_DOMAIN || undefined;
 const region = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || undefined;
-export const functions = getFunctions(app, customDomain || region || undefined);
+export const functions = getFunctions(app, region || undefined);
 
 // Optional: connect to Functions emulator if enabled via env flag
 if (import.meta.env.VITE_USE_FUNCTIONS_EMULATOR === '1') {
