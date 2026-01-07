@@ -1154,7 +1154,7 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
       const fortyEightHoursAgo = new Date(now.getTime() - (48 * 60 * 60 * 1000));
 
       const ordersToDelete = allOrders.filter(order => {
-        if (order.status !== 'PENDING') return false;
+        if (order.status !== 'PENDING' && order.status !== 'succeeded') return false;
         const createdDate = order.created?.toDate ? order.created.toDate() : new Date(order.created);
         return createdDate < fortyEightHoursAgo;
       });
