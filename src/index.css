@@ -165,23 +165,23 @@
 
 /* Light theme */
 [data-theme="light"] {
-  --bg: #f8f9fa;
+  --bg: #F6F0D7;
   --bg-2: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f8f9fa;
+  --surface-2: #F6F0D7;
   --text: #212529;
-  --text-dim: #6c757d;
-  --muted: #868e96;
-  --border: #dee2e6;
-  --highlight: #fff3cd;
+  --text-dim: #495057;
+  --muted: #6c757d;
+  --border: #ced4da;
+  --highlight: #e8f5e8;
   --danger: #dc3545;
   --success: #28a745;
-  /* Keep the wood/metal accents for brand consistency */
-  --primary: #c6a375;
-  --primary-2: #d9b98a;
+  /* Nature-inspired palette */
+  --primary: #89986D;
+  --primary-2: #C5D89D;
   --walnut: #8c5a2f;
-  --accent: #7a8a99;
-  --accent-2: #a8b5bf;
+  --accent: #9CAB84;
+  --accent-2: #C5D89D;
   --moss: #6f8c64;
   --sage: #9caf97;
 }
@@ -446,8 +446,8 @@ img { max-width: 100%; display: block; border-radius: var(--r-md); }
 .shop-filters {
   background: linear-gradient(180deg, color-mix(in oklab, var(--surface) 92%, black 8%), color-mix(in oklab, var(--surface-2) 90%, black 10%));
   border: 1px solid color-mix(in oklab, var(--border) 75%, black 25%);
-  border-radius: var(--r-lg);
-  padding: 1.8rem 1.4rem;
+  border-radius: var(--r-md);
+  padding: 1.1rem calc(1.4rem + 4px) 1.1rem 1.1rem;
   box-shadow: 0 14px 30px rgba(0,0,0,0.28), var(--glow-steel);
   position: sticky;
   top: 6.25rem;
@@ -455,7 +455,7 @@ img { max-width: 100%; display: block; border-radius: var(--r-md); }
   overflow: auto;
 }
 
-.shop-filters::-webkit-scrollbar { width: 6px; }
+.shop-filters::-webkit-scrollbar { width: 8px; border-radius: var(--r-md); }
 .shop-filters::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--border) 60%, var(--accent) 40%); border-radius: 999px; }
 
 /* Projects gallery mosaic */

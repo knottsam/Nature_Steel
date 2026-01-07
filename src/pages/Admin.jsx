@@ -494,7 +494,10 @@ export default function Admin() {
         title: projectTitle.trim(),
         images: imageUrls,
         mainImage: finalMainImage,
-        created: projectEditId ? undefined : Timestamp.now(),
+      }
+
+      if (!projectEditId) {
+        data.created = Timestamp.now();
       }
 
       if (projectEditId) {
