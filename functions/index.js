@@ -1019,6 +1019,20 @@ exports.squareWebhook = onRequest({
         customer.email = payment.buyer_email_address;
       }
 
+      // Capture buyer name if available from Square payment
+      if (payment.billing_address && payment.billing_address.first_name) {
+        const firstName = payment.billing_address.first_name;
+        const lastName = payment.billing_address.last_name || '';
+        customer.name = `${firstName} ${lastName}`.trim();
+      }
+
+      // Also check shipping address for name
+      if (!customer.name && payment.shipping_address && payment.shipping_address.first_name) {
+        const firstName = payment.shipping_address.first_name;
+        const lastName = payment.shipping_address.last_name || '';
+        customer.name = `${firstName} ${lastName}`.trim();
+      }
+
       const orderUpdate = {
         id: orderRef.id,
         amount: Number(payment.amount_money.amount),

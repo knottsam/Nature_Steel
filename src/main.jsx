@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import App from './App.jsx'
 import './index.css'
 import { SiteConfigProvider } from './context/SiteConfigContext.jsx'
+import { ThemeProvider } from './context/ThemeContext.jsx'
 
 const Home = lazy(() => import('./pages/Home.jsx'))
 const Shop = lazy(() => import('./pages/Shop.jsx'))
@@ -45,8 +46,10 @@ const router = createBrowserRouter([
 
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-      <SiteConfigProvider>
-        <RouterProvider router={router} />
-      </SiteConfigProvider>
+      <ThemeProvider>
+        <SiteConfigProvider>
+          <RouterProvider router={router} />
+        </SiteConfigProvider>
+      </ThemeProvider>
     </React.StrictMode>,
 )

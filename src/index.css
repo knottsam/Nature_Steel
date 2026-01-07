@@ -135,6 +135,56 @@
   --r-sm: 8px;
   --space: 1rem;
 }
+
+/* Theme toggle button */
+.theme-toggle {
+  background: none;
+  border: 1px solid color-mix(in oklab, var(--surface-2) 50%, var(--text) 50%);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  padding: 0.5rem;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  color: var(--text);
+  margin-left: 0.5rem;
+}
+
+.theme-toggle:hover {
+  background: var(--surface-2);
+  border-color: var(--primary);
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --bg: #f8f9fa;
+  --bg-2: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f8f9fa;
+  --text: #212529;
+  --text-dim: #6c757d;
+  --muted: #868e96;
+  --border: #dee2e6;
+  --highlight: #fff3cd;
+  --danger: #dc3545;
+  --success: #28a745;
+  /* Keep the wood/metal accents for brand consistency */
+  --primary: #c6a375;
+  --primary-2: #d9b98a;
+  --walnut: #8c5a2f;
+  --accent: #7a8a99;
+  --accent-2: #a8b5bf;
+  --moss: #6f8c64;
+  --sage: #9caf97;
+}
 .admin-checkbox-group {
   display: inline-flex;
   flex-direction: column;
@@ -1431,6 +1481,10 @@ nav a:hover { opacity: .9; }
   .nav-toggle {
     display: inline-flex;
     margin-left: auto;
+  }
+
+  .theme-toggle {
+    margin-left: 0.5rem;
   }
 }
 

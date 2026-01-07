@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { useCart } from '../context/CartContext.jsx'
 import { useSiteConfig } from '../context/SiteConfigContext.jsx'
+import ThemeToggle from './ThemeToggle.jsx'
 import logoImage from '../assets/images/N&S_logo.png'
 
 export default function NavBar() {
@@ -43,7 +44,8 @@ export default function NavBar() {
           <NavLink to="/cart" className="nav-cart" onClick={handleLinkClick}>Cart ({totalQuantity})</NavLink>
           {/* <NavLink to="/admin">Admin</NavLink> */}
         </div>
-  <div className="spacer-grow" />
+        <div className="spacer-grow" />
+        <ThemeToggle />
       </div>
     </nav>
   )

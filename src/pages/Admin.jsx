@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { db, storage } from '../firebase';
-import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc, updateDoc, setDoc, query, orderBy, deleteField } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc, updateDoc, setDoc, query, orderBy, deleteField, runTransaction } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 import { useSiteConfig } from '../context/SiteConfigContext.jsx';
@@ -1141,6 +1141,30 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
     setDownloading(false);
   };
 
+  const restoreInventoryForOrder = async (items) => {
+    if (!Array.isArray(items) || items.length === 0) return;
+    for (const line of items) {
+      try {
+        const productId = String(line && line.productId);
+        const qty = Number(line && line.qty);
+        if (!productId || !Number.isInteger(qty) || qty <= 0) continue;
+        const ref = doc(db, 'furniture', productId);
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(ref);
+          if (!snap.exists) return;
+          const data = snap.data() || {};
+          if (typeof data.stock === 'number') {
+            const next = data.stock + qty;
+            tx.update(ref, { stock: next });
+          }
+        });
+        console.log('[Admin] Restored stock for', productId, 'qty', qty);
+      } catch (err) {
+        console.error('[Admin] Failed to restore stock for', line && line.productId, err);
+      }
+    }
+  };
+
   const cleanupOldOrders = async () => {
     try {
       onLoadingChange(true);
@@ -1183,6 +1207,10 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
 
       for (const order of ordersToDelete) {
         try {
+          // Restore inventory before deleting the order
+          if (order.items && Array.isArray(order.items)) {
+            await restoreInventoryForOrder(order.items);
+          }
           await deleteDoc(doc(db, 'orders', order.id));
           console.log(`[Admin] Deleted old pending order: ${order.id}`);
           deletedCount++;
