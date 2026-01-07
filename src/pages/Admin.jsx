@@ -644,7 +644,14 @@ export default function Admin() {
       {mode === 'orders' && (
         <div style={{ maxWidth: 1000, margin: '0 auto 2rem' }}>
           <h3 style={{ marginBottom: 8 }}>Orders</h3>
-          <OrdersTable orders={orders} loading={ordersLoading} error={ordersError} />
+          <OrdersTable 
+            orders={orders} 
+            loading={ordersLoading} 
+            error={ordersError}
+            onOrdersChange={setOrders}
+            onLoadingChange={setOrdersLoading}
+            onErrorChange={setOrdersError}
+          />
         </div>
       )}
 
@@ -1089,7 +1096,7 @@ function formatOrderDate(value) {
   return `${day}/${month}/${year} ${time}`;
 }
 
-function OrdersTable({ orders, loading, error }) {
+function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, onErrorChange }) {
   const [downloading, setDownloading] = useState(false);
 
   const exportCsv = async () => {
@@ -1136,8 +1143,8 @@ function OrdersTable({ orders, loading, error }) {
 
   const cleanupOldOrders = async () => {
     try {
-      setOrdersLoading(true);
-      setOrdersError('');
+      onLoadingChange(true);
+      onErrorChange('');
 
       const q = query(collection(db, 'orders'), orderBy('created', 'desc'));
       const snap = await getDocs(q);
@@ -1154,13 +1161,13 @@ function OrdersTable({ orders, loading, error }) {
 
       if (ordersToDelete.length === 0) {
         alert('No old pending orders to clean up.');
-        setOrdersLoading(false);
+        onLoadingChange(false);
         return;
       }
 
       const confirmDelete = window.confirm(`Delete ${ordersToDelete.length} pending orders older than 48 hours?`);
       if (!confirmDelete) {
-        setOrdersLoading(false);
+        onLoadingChange(false);
         return;
       }
 
@@ -1182,13 +1189,13 @@ function OrdersTable({ orders, loading, error }) {
       // Refetch orders
       const freshSnap = await getDocs(q);
       const freshList = freshSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setOrders(freshList);
+      onOrdersChange(freshList);
 
     } catch (err) {
       console.error('[Admin] Cleanup error:', err);
-      setOrdersError('Cleanup failed: ' + (err?.message || 'unknown'));
+      onErrorChange('Cleanup failed: ' + (err?.message || 'unknown'));
     }
-    setOrdersLoading(false);
+    onLoadingChange(false);
   };
 
   if (loading) return <div>Loading orders…</div>;
