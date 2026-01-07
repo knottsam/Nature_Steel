@@ -14,6 +14,7 @@ export default function Shop() {
   const [selectedMaterials, setSelectedMaterials] = useState([])
   const [selectedItemTypes, setSelectedItemTypes] = useState([])
   const [currentPage, setCurrentPage] = useState(1)
+  const [filtersCollapsed, setFiltersCollapsed] = useState(true)
 
   useEffect(() => {
     if (!configHealth.ok) {
@@ -188,9 +189,17 @@ export default function Shop() {
       <p className="muted">Fine core pieces. Built to order. Choose customization if you want it.</p>
       <div className="spacer" />
       <div className="shop-layout">
-        <aside className="shop-filters" aria-label="Filters">
+        <aside className={`shop-filters ${filtersCollapsed ? 'is-collapsed' : ''}`} aria-label="Filters">
           <div className="shop-filters__header">
             <h2 className="h2">Filter & Search</h2>
+            <button
+              type="button"
+              className="shop-filters__toggle"
+              onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+              aria-label={filtersCollapsed ? 'Show filters' : 'Hide filters'}
+            >
+              {filtersCollapsed ? 'Filter' : 'Less'}
+            </button>
             {hasActiveFilters && (
               <button type="button" className="btn ghost" onClick={clearFilters}>
                 Clear filters

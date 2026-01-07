@@ -68,10 +68,9 @@ export default function Projects() {
     <div>
       <h1 className="h1">Projects</h1>
       <p className="muted">
-        Explore the gallery of recent commissions, collabs, and pop-up activations. For showings
-        or custom work, reach out anytime at{' '}
-        <a className="link-underline" href="mailto:hello@natures-steel.com">
-          hello@natures-steel.com
+        Explore the gallery of recent commissions, collaborations, and pop-up shows. For custom work, reach out anytime at{' '}
+        <a className="link-colored" href="mailto:natureandsteelbespoke@gmail.com">
+          natureandsteelbespoke@gmail.com
         </a>
         .
       </p>

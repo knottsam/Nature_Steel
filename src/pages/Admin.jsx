@@ -101,7 +101,33 @@ export default function Admin() {
       try {
         const q = query(collection(db, 'orders'), orderBy('created', 'desc'));
         const snap = await getDocs(q);
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        // Clean up old pending orders (older than 48 hours)
+        const now = new Date();
+        const fortyEightHoursAgo = new Date(now.getTime() - (48 * 60 * 60 * 1000));
+
+        const ordersToDelete = list.filter(order => {
+          if (order.status !== 'pending') return false;
+          const createdDate = order.created?.toDate ? order.created.toDate() : new Date(order.created);
+          return createdDate < fortyEightHoursAgo;
+        });
+
+        if (ordersToDelete.length > 0) {
+          console.log(`[Admin] Deleting ${ordersToDelete.length} old pending orders...`);
+          for (const order of ordersToDelete) {
+            try {
+              await deleteDoc(doc(db, 'orders', order.id));
+              console.log(`[Admin] Deleted old pending order: ${order.id}`);
+            } catch (deleteErr) {
+              console.error(`[Admin] Failed to delete order ${order.id}:`, deleteErr);
+            }
+          }
+          // Refetch after cleanup
+          const freshSnap = await getDocs(q);
+          list = freshSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+
         setOrders(list);
       } catch (err) {
         console.error('[Admin] Orders fetch error:', err);
