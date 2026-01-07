@@ -187,8 +187,8 @@ export default function Shop() {
   return (
     <>
       <SEO
-        title="Shop Handcrafted Furniture | Nature & Steel Bespoke"
-        description="Browse our collection of handcrafted furniture, bowls, vases, pens, and bespoke art pieces. Built to order with customization options."
+        title="Shop Custom Handcrafted Furniture | Nature & Steel Bespoke"
+        description="Browse our collection of bespoke handcrafted furniture, bowls, vases, pens, and art pieces. Each item is made to order with customization options available."
       />
       <div>
       <h1 className="h1">Nature & Steel Bespoke Collection</h1>

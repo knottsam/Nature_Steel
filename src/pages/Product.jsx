@@ -195,10 +195,38 @@ export default function Product() {
   return (
     <>
       <SEO
-        title={`${product.name} | ${BRAND}`}
-        description={summaryLine || product.description || DEFAULT_DESCRIPTION}
+        title={`${product.name} - Handcrafted ${product.itemType || 'Furniture'} | Nature & Steel Bespoke`}
+        description={summaryLine || product.description || `Custom ${product.itemType || 'furniture'} made by hand. ${product.material ? `Crafted from ${product.material}.` : ''} Order bespoke pieces from Nature & Steel Bespoke.`}
         image={images[0]}
         keywords={[...DEFAULT_KEYWORDS, product.material, product.itemType].filter(Boolean)}
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "Product",
+          "name": product.name,
+          "description": product.description || summaryLine,
+          "image": images,
+          "brand": {
+            "@type": "Brand",
+            "name": "Nature & Steel Bespoke"
+          },
+          "offers": {
+            "@type": "Offer",
+            "price": price / 100,
+            "priceCurrency": "GBP",
+            "availability": "https://schema.org/InStock",
+            "seller": {
+              "@type": "Organization",
+              "name": "Nature & Steel Bespoke"
+            }
+          },
+          "material": product.material,
+          "category": product.itemType
+        }}
+        breadcrumb={[
+          { name: "Home", url: "/" },
+          { name: "Shop", url: "/shop" },
+          { name: product.name, url: window.location.pathname }
+        ]}
       />
       <div className="grid" style={{gridTemplateColumns:'1.1fr 1fr', gap:'2rem'}}>
       <div className="grid" style={{gap:'1rem'}}>

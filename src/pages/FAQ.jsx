@@ -6,8 +6,8 @@ export default function FAQ() {
   return (
     <>
       <SEO
-        title="FAQ & Process | Nature & Steel Bespoke"
-        description="Frequently asked questions about our handcrafted furniture process, lead times, customization, and ordering information."
+        title="FAQ & Ordering Process | Nature & Steel Bespoke"
+        description="Frequently asked questions about our handcrafted furniture process, lead times, customization options, pricing, and how to order bespoke pieces."
       />
       <div>
       <h1 className="h1">FAQ & Process</h1>

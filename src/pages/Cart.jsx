@@ -27,7 +27,7 @@ export default function Cart() {
     <>
       <SEO
         title="Shopping Cart | Nature & Steel Bespoke"
-        description="Review your cart and proceed to checkout for your custom handcrafted furniture pieces."
+        description="Review your cart and proceed to secure checkout for your custom handcrafted furniture and bespoke art pieces from Nature & Steel Bespoke."
       />
       <div>
       <h1 className="h1">Your cart</h1>

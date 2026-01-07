@@ -17,8 +17,8 @@ export default function Artists() {
   return (
     <>
       <SEO
-        title="Artists | Nature & Steel Bespoke"
-        description="Meet our talented artists who create bespoke custom art for your furniture pieces. Each artist brings a unique style and palette."
+        title="Custom Art Artists | Nature & Steel Bespoke"
+        description="Meet our talented artists who create bespoke custom artwork for your furniture pieces. Each artist brings unique styles and techniques to your commissioned pieces."
       />
       <div>
       <h1 className="h1">The Artists</h1>

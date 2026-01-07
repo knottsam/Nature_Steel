@@ -68,8 +68,8 @@ export default function Projects() {
   return (
     <>
       <SEO
-        title="Projects Gallery | Nature & Steel Bespoke"
-        description="View our gallery of recent commissions, collaborations, and bespoke furniture projects. See examples of our handcrafted work."
+        title="Recent Projects Gallery | Nature & Steel Bespoke"
+        description="View our portfolio of recent commissions, collaborations, and bespoke furniture projects. See examples of our handcrafted work and custom designs."
       />
       <div>
       <h1 className="h1">Projects</h1>

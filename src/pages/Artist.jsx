@@ -31,8 +31,8 @@ export default function Artist() {
   return (
     <>
       <SEO
-        title={`${artist.name} | Artist | Nature & Steel Bespoke`}
-        description={`Meet ${artist.name}, one of our talented artists. ${artist.bio || 'Specializing in bespoke custom art for furniture pieces.'}`}
+        title={`${artist.name} - Custom Artist | Nature & Steel Bespoke`}
+        description={`Meet ${artist.name}, one of our talented artists specializing in bespoke custom artwork for furniture. ${artist.bio || 'Explore their unique style and portfolio.'}`}
         image={artist.thumbnail}
       />
       <div>

@@ -122,6 +122,8 @@ export default function SEO({
   type = 'website',
   keywords = [],
   noIndex = false,
+  structuredData,
+  breadcrumb,
 }) {
   useEffect(() => {
     const fullTitle = title ? `${title} | ${BRAND}` : DEFAULT_TITLE
@@ -148,11 +150,29 @@ export default function SEO({
     const structuredData = buildStructuredData(canonicalHref, fullTitle, desc, absoluteImageUrl)
     upsertStructuredData(structuredData)
 
+    if (breadcrumb && breadcrumb.length > 0) {
+      const breadcrumbData = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": breadcrumb.map((crumb, index) => ({
+          "@type": "ListItem",
+          "position": index + 1,
+          "name": crumb.name,
+          "item": buildCanonicalUrl(crumb.url)
+        }))
+      }
+      upsertStructuredData(breadcrumbData, 'breadcrumb')
+    }
+
+    if (structuredData) {
+      upsertStructuredData(structuredData, 'custom')
+    }
+
     upsertMeta('name', 'twitter:card', 'summary_large_image')
     upsertMeta('name', 'twitter:title', fullTitle)
     upsertMeta('name', 'twitter:description', desc)
     upsertMeta('name', 'twitter:image', absoluteImageUrl)
-  }, [title, description, image, url, type, keywords, noIndex])
+  }, [title, description, image, url, type, keywords, noIndex, structuredData, breadcrumb])
 
   return null
 }
