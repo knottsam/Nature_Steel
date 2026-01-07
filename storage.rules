@@ -14,6 +14,12 @@ service firebase.storage {
       allow write, delete: if isAdmin();
     }
 
+    // Project images: public read for gallery; writes restricted to admins
+    match /projects/{allPaths=**} {
+      allow read: if true;
+      allow write, delete: if isAdmin();
+    }
+
     // Deny all other paths by default
     match /{allPaths=**} {
       allow read, write: if false;
