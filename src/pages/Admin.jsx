@@ -108,7 +108,7 @@ export default function Admin() {
         const fortyEightHoursAgo = new Date(now.getTime() - (48 * 60 * 60 * 1000));
 
         const ordersToDelete = list.filter(order => {
-          if (order.status !== 'pending') return false;
+          if (order.status !== 'PENDING') return false;
           const createdDate = order.created?.toDate ? order.created.toDate() : new Date(order.created);
           return createdDate < fortyEightHoursAgo;
         });
@@ -1154,10 +1154,17 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
       const fortyEightHoursAgo = new Date(now.getTime() - (48 * 60 * 60 * 1000));
 
       const ordersToDelete = allOrders.filter(order => {
-        if (order.status !== 'pending') return false;
+        if (order.status !== 'PENDING') return false;
         const createdDate = order.created?.toDate ? order.created.toDate() : new Date(order.created);
         return createdDate < fortyEightHoursAgo;
       });
+
+      console.log(`[Admin] Found ${allOrders.length} total orders`);
+      console.log(`[Admin] Orders by status:`, allOrders.reduce((acc, order) => {
+        acc[order.status] = (acc[order.status] || 0) + 1;
+        return acc;
+      }, {}));
+      console.log(`[Admin] Found ${ordersToDelete.length} PENDING orders older than 48 hours`);
 
       if (ordersToDelete.length === 0) {
         alert('No old pending orders to clean up.');
