@@ -80,7 +80,6 @@ export default function CheckoutComplete() {
       <p className='muted'>Need to make a change or have a question? We are happy to help.</p>
       <div className='row' style={{ gap: '1rem', flexWrap: 'wrap' }}>
         <Link to='/shop' className='btn secondary'>Continue shopping</Link>
-        <Link to='/projects' className='btn'>Projects</Link>
       </div>
     </div>
   )

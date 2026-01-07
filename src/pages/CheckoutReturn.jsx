@@ -21,8 +21,15 @@ export default function CheckoutReturn() {
       }
     }
 
+    let attempts = 0
+    const maxAttempts = 15 // 15 attempts * 2s = 30s max wait
+    const pollInterval = 2000 // 2 seconds
+
     const checkStatus = async () => {
+      if (!active) return
+      attempts++
       try {
+        setStatusMessage(`Checking payment status... (attempt ${attempts}/${maxAttempts})`)
         const callable = httpsCallable(functions, 'getOrderStatus')
         const response = await callable({ orderId: orderId || undefined, token: token || undefined })
         if (!active) return
@@ -43,13 +50,23 @@ export default function CheckoutReturn() {
 
         const normalizedStatus = typeof data.status === 'string' ? data.status.toUpperCase() : ''
         const successStatuses = ['COMPLETED', 'CAPTURED', 'APPROVED', 'PAID']
+        const failedStatuses = ['CANCELLED', 'FAILED', 'DECLINED', 'REJECTED']
 
         if (successStatuses.includes(normalizedStatus)) {
           navigate(`/checkout/complete?${params.toString()}`, { replace: true })
           return
+        } else if (failedStatuses.includes(normalizedStatus)) {
+          navigate(`/checkout/cancelled?${params.toString()}`, { replace: true })
+          return
+        } else if (normalizedStatus === 'PENDING' && attempts < maxAttempts) {
+          // Still pending, poll again
+          setTimeout(checkStatus, pollInterval)
+          return
+        } else {
+          // Timed out or unknown status
+          navigate('/checkout/cancelled?status=timeout', { replace: true })
+          return
         }
-
-        navigate(`/checkout/cancelled?${params.toString()}`, { replace: true })
       } catch (err) {
         if (!active) return
         console.error('[checkout] Failed to verify order status', err)

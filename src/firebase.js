@@ -40,13 +40,15 @@ if (!configHealth.ok) {
   console.log('[firebase] Config health OK, projectId:', configHealth.projectId);
 }
 
+let app;
 try {
-  export const app = initializeApp(firebaseConfig);
+  app = initializeApp(firebaseConfig);
   console.log('[firebase] Firebase app initialized successfully');
 } catch (error) {
   console.error('[firebase] Failed to initialize Firebase app:', error);
   throw error;
 }
+export { app };
 // Optional App Check: requires VITE_FIREBASE_APPCHECK_KEY (reCAPTCHA v3 site key)
 const appCheckKey = import.meta.env.VITE_FIREBASE_APPCHECK_KEY;
 if (appCheckKey) {
