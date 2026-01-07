@@ -47,11 +47,6 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    match /settings/siteVisibility {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
     function isValidProject() {
       return request.resource.data.keys().hasOnly([
         'title', 'images', 'mainImage', 'created', 'updated'

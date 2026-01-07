@@ -1092,43 +1092,61 @@ function formatOrderDate(value) {
 function OrdersTable({ orders, loading, error }) {
   const [downloading, setDownloading] = useState(false);
 
-  const exportCsv = () => {
+  const cleanupOldOrders = async () => {
     try {
-      setDownloading(true);
-      const header = [
-        'id','amount','currency','status','created','customer.name','customer.email','customer.address','customer.city','customer.postcode','customer.countryCode','receiptUrl'
-      ];
-      const rows = orders.map(o => [
-  o.id,
-  o.amount,
-  o.currency,
-  o.status,
-  formatOrderDate(o.created),
-        o.customer?.name || '',
-        o.customer?.email || '',
-        o.customer?.address || '',
-        o.customer?.city || '',
-        o.customer?.postcode || '',
-        o.customer?.countryCode || '',
-        o.squareReceiptUrl || ''
-      ]);
-      const csv = [header, ...rows].map(r => r.map(cell => {
-        const s = String(cell ?? '');
-        if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-          return '"' + s.replace(/"/g, '""') + '"';
+      setOrdersLoading(true);
+      setOrdersError('');
+
+      const q = query(collection(db, 'orders'), orderBy('created', 'desc'));
+      const snap = await getDocs(q);
+      const allOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const now = new Date();
+      const fortyEightHoursAgo = new Date(now.getTime() - (48 * 60 * 60 * 1000));
+
+      const ordersToDelete = allOrders.filter(order => {
+        if (order.status !== 'pending') return false;
+        const createdDate = order.created?.toDate ? order.created.toDate() : new Date(order.created);
+        return createdDate < fortyEightHoursAgo;
+      });
+
+      if (ordersToDelete.length === 0) {
+        alert('No old pending orders to clean up.');
+        setOrdersLoading(false);
+        return;
+      }
+
+      const confirmDelete = window.confirm(`Delete ${ordersToDelete.length} pending orders older than 48 hours?`);
+      if (!confirmDelete) {
+        setOrdersLoading(false);
+        return;
+      }
+
+      console.log(`[Admin] Deleting ${ordersToDelete.length} old pending orders...`);
+      let deletedCount = 0;
+
+      for (const order of ordersToDelete) {
+        try {
+          await deleteDoc(doc(db, 'orders', order.id));
+          console.log(`[Admin] Deleted old pending order: ${order.id}`);
+          deletedCount++;
+        } catch (deleteErr) {
+          console.error(`[Admin] Failed to delete order ${order.id}:`, deleteErr);
         }
-        return s;
-      }).join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `orders-${new Date().toISOString().slice(0,10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } finally {
-      setDownloading(false);
+      }
+
+      alert(`Successfully deleted ${deletedCount} old pending orders.`);
+
+      // Refetch orders
+      const freshSnap = await getDocs(q);
+      const freshList = freshSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setOrders(freshList);
+
+    } catch (err) {
+      console.error('[Admin] Cleanup error:', err);
+      setOrdersError('Cleanup failed: ' + (err?.message || 'unknown'));
     }
+    setOrdersLoading(false);
   };
 
   if (loading) return <div>Loading orders…</div>;
@@ -1139,14 +1157,24 @@ function OrdersTable({ orders, loading, error }) {
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
         <div style={{fontSize:12, color:'var(--muted)'}}>Total: {orders.length}</div>
-        <button
-          type="button"
-          onClick={exportCsv}
-          disabled={downloading}
-          className="btn ghost btn-compact"
-        >
-          Export CSV
-        </button>
+        <div style={{ display:'flex', gap:8 }}>
+          <button
+            type="button"
+            onClick={cleanupOldOrders}
+            disabled={loading}
+            className="btn ghost btn-compact"
+          >
+            Clean Up Old Orders
+          </button>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={downloading}
+            className="btn ghost btn-compact"
+          >
+            Export CSV
+          </button>
+        </div>
       </div>
       <div style={{ overflowX:'auto' }}>
         <table style={{ width:'100%', borderCollapse:'collapse' }}>

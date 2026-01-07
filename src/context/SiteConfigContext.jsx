@@ -5,39 +5,51 @@ import { DEFAULT_SITE_VISIBILITY, SITE_VISIBILITY_DOC } from '../config/siteVisi
 const SiteConfigContext = createContext({
   config: DEFAULT_SITE_VISIBILITY,
   loading: true,
+  updateConfig: async () => {},
 })
 
 export function SiteConfigProvider({ children }) {
   const [config, setConfig] = useState(DEFAULT_SITE_VISIBILITY)
   const [loading, setLoading] = useState(true)
 
+  const updateConfig = async (updates) => {
+    try {
+      await setDoc(SITE_VISIBILITY_DOC, { ...config, ...updates }, { merge: true })
+      setConfig(prev => ({ ...prev, ...updates }))
+    } catch (error) {
+      console.error('[SiteConfig] Update failed:', error)
+      throw error
+    }
+  }
+
   useEffect(() => {
     const unsubscribe = onSnapshot(
       SITE_VISIBILITY_DOC,
       (snapshot) => {
         if (!snapshot.exists()) {
-          setDoc(SITE_VISIBILITY_DOC, DEFAULT_SITE_VISIBILITY).catch((error) => {
-            console.error('[SiteConfig] failed to seed config:', error)
-          })
-          setConfig(DEFAULT_SITE_VISIBILITY)
+          console.log('[SiteConfig] Document does not exist, using defaults');
+          setConfig(DEFAULT_SITE_VISIBILITY);
+          setLoading(false);
         } else {
           setConfig({
             ...DEFAULT_SITE_VISIBILITY,
             ...snapshot.data(),
-          })
+          });
+          setLoading(false);
         }
-        setLoading(false)
       },
       (error) => {
-        console.error('[SiteConfig] listener error:', error)
-        setLoading(false)
+        console.error('[SiteConfig] Listener error:', error);
+        // On error, fall back to defaults instead of failing
+        setConfig(DEFAULT_SITE_VISIBILITY);
+        setLoading(false);
       },
-    )
-    return () => unsubscribe()
-  }, [])
+    );
+    return () => unsubscribe();
+  }, []);
 
   return (
-    <SiteConfigContext.Provider value={{ config, loading }}>
+    <SiteConfigContext.Provider value={{ config, loading, updateConfig }}>
       {children}
     </SiteConfigContext.Provider>
   )
