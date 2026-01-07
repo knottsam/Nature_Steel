@@ -1092,6 +1092,48 @@ function formatOrderDate(value) {
 function OrdersTable({ orders, loading, error }) {
   const [downloading, setDownloading] = useState(false);
 
+  const exportCsv = async () => {
+    if (!orders || orders.length === 0) return;
+
+    setDownloading(true);
+    try {
+      // Prepare CSV headers
+      const headers = ['Created', 'Status', 'Amount', 'Currency', 'Customer Name', 'Customer Email', 'Items Summary', 'Receipt URL'];
+
+      // Prepare CSV rows
+      const rows = orders.map(order => [
+        formatOrderDate(order.created),
+        order.status || '',
+        typeof order.amount === 'number' ? (order.amount / 100).toFixed(2) : '',
+        order.currency || '',
+        order.customer?.name || '',
+        order.customer?.email || '',
+        order.itemsSummary || '',
+        order.squareReceiptUrl || ''
+      ]);
+
+      // Combine headers and rows
+      const csvContent = [headers, ...rows]
+        .map(row => row.map(field => `"${field}"`).join(','))
+        .join('\n');
+
+      // Create and download the file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `orders_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('CSV export failed:', err);
+      alert('Failed to export CSV');
+    }
+    setDownloading(false);
+  };
+
   const cleanupOldOrders = async () => {
     try {
       setOrdersLoading(true);
