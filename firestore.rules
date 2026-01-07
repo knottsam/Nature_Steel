@@ -52,6 +52,22 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    function isValidProject() {
+      return request.resource.data.keys().hasOnly([
+        'title', 'images', 'mainImage', 'created', 'updated'
+      ])
+      && request.resource.data.title is string
+      && request.resource.data.images is list
+      && request.resource.data.mainImage is string
+      && (!('updated' in request.resource.data) || request.resource.data.updated is timestamp);
+    }
+
+    match /projects/{docId} {
+      allow read: if true; // Projects are public
+      allow create, update: if isAdmin() && isValidProject();
+      allow delete: if isAdmin();
+    }
+
     // Deny everything else by default
     match /{document=**} {
       allow read, write: if false;
