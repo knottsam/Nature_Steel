@@ -93,6 +93,7 @@ export default function Checkout() {
           items.map((item) => ({
             productId: item.product?.id || item.productId,
             artistId: item.artist?.id || item.artistId || null,
+            material: item.material || null,
             qty: item.qty,
           }))
         ).slice(0, 4500)

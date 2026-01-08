@@ -40,6 +40,20 @@ const squareLocationId = defineSecret("SQUARE_LOCATION_ID");
 const squareEnvironment = defineSecret("SQUARE_ENVIRONMENT");
 const squareWebhookSecret = defineSecret("SQUARE_WEBHOOK_SECRET");
 
+// Static artists data (mirrored from client-side)
+const ARTISTS = [
+  {
+    id: 'a1',
+    name: '@lets_have_a_skeg',
+    feePence: 15000,
+  }
+];
+
+// Site settings for pricing calculations
+const SITE_SETTINGS = {
+  markupPercent: 0.5, // 50% markup on artist fees
+};
+
 function readSecret(secret, envKey) {
   try {
     const fromSecret = (typeof secret.value === "function") ? secret.value() : undefined;
@@ -226,6 +240,8 @@ function parseCartItemsPayload(rawItems) {
 
   const normalized = parsed.map((entry) => {
     const productId = entry && (entry.productId != null ? String(entry.productId) : null);
+    const artistId = entry && (entry.artistId != null ? String(entry.artistId) : null);
+    const material = entry && (entry.material != null ? String(entry.material) : null);
     const qty = Number(entry && entry.qty);
     if (!productId || !Number.isInteger(qty) || qty <= 0) {
       throw new HttpsError(
@@ -234,7 +250,7 @@ function parseCartItemsPayload(rawItems) {
           {details: "Each item must include productId and positive integer qty."},
       );
     }
-    return {productId, qty};
+    return {productId, artistId, material, qty};
   });
 
   return normalized;
@@ -244,7 +260,18 @@ function buildItemsSummary(details) {
   if (!Array.isArray(details) || !details.length) return "";
   return details.map((item) => {
     const label = item.name || item.productId;
-    return `${label}×${item.qty}`;
+    const customizations = [];
+    if (item.material && item.material !== 'default') {
+      customizations.push(`Material: ${item.material}`);
+    }
+    if (item.artistId) {
+      const artist = ARTISTS.find(a => a.id === item.artistId);
+      if (artist) {
+        customizations.push(`Artist: ${artist.name}`);
+      }
+    }
+    const customizationText = customizations.length > 0 ? ` (${customizations.join(', ')})` : '';
+    return `${label}${customizationText}×${item.qty}`;
   }).join(", ");
 }
 
@@ -268,6 +295,8 @@ async function fetchCartDetails(cartItems) {
 
   await Promise.all(cartItems.map(async (line) => {
     const productId = String(line.productId);
+    const artistId = line.artistId || null;
+    const material = line.material || null;
     const qty = Number(line.qty);
     try {
       const ref = db.collection("furniture").doc(productId);
@@ -277,7 +306,18 @@ async function fetchCartDetails(cartItems) {
         return;
       }
       const data = snap.data() || {};
-      const unitPrice = (typeof data.price === "number" && Number.isFinite(data.price)) ? Number(data.price) : null;
+      let unitPrice = (typeof data.price === "number" && Number.isFinite(data.price)) ? Number(data.price) : null;
+      
+      // Add artist fee and markup if artist is selected
+      if (artistId && unitPrice != null) {
+        const artist = ARTISTS.find(a => a.id === artistId);
+        if (artist) {
+          const artistFee = artist.feePence;
+          const markup = Math.round(artistFee * SITE_SETTINGS.markupPercent);
+          unitPrice = unitPrice + artistFee + markup;
+        }
+      }
+      
       const name = typeof data.name === "string" && data.name ? data.name : productId;
       const normalizedImages = (() => {
         if (Array.isArray(data.images)) {
@@ -327,6 +367,8 @@ async function fetchCartDetails(cartItems) {
 
       details.push({
         productId,
+        artistId,
+        material,
         qty,
         name,
         unitPrice,
@@ -694,6 +736,8 @@ exports.createSquareCheckoutLink = onCall({
     const db = getFirestore();
     const storedItems = cartDetails.items.map((item) => ({
       productId: item.productId,
+      artistId: item.artistId || null,
+      material: item.material || null,
       name: item.name || null,
       qty: item.qty,
       unitPrice: Number.isInteger(item.unitPrice) ? Number(item.unitPrice) : null,
