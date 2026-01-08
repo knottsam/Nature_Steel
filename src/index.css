@@ -1453,6 +1453,7 @@ nav a:hover { opacity: .9; }
     align-items: center;
     padding: 0.5rem;
     position: relative;
+    gap: 0.125rem;
   }
 
   nav .spacer-grow {
@@ -1483,7 +1484,7 @@ nav a:hover { opacity: .9; }
   }
 
   .theme-toggle {
-    margin-left: 0.5rem;
+    /* margin-left: 0.5rem; */
   }
 }
 
