@@ -24,8 +24,13 @@ export default function Shop() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedMaterials, setSelectedMaterials] = useState([])
   const [selectedItemTypes, setSelectedItemTypes] = useState([])
+  const [minPrice, setMinPrice] = useState('')
+  const [maxPrice, setMaxPrice] = useState('')
+  const [sortOption, setSortOption] = useState('name')
   const [currentPage, setCurrentPage] = useState(1)
   const [filtersCollapsed, setFiltersCollapsed] = useState(true)
+  const [materialsExpanded, setMaterialsExpanded] = useState(false)
+  const [itemTypesExpanded, setItemTypesExpanded] = useState(false)
 
   useEffect(() => {
     if (!configHealth.ok) {
@@ -129,7 +134,7 @@ export default function Shop() {
       return []
     }
     const search = searchTerm.trim().toLowerCase()
-    return allProducts.filter(product => {
+    let filtered = allProducts.filter(product => {
       const productMaterials = new Set()
       if (typeof product.material === 'string') {
         product.material.split(',').map(v => v.trim().toLowerCase()).filter(Boolean).forEach(v => productMaterials.add(v))
@@ -156,13 +161,27 @@ export default function Shop() {
           .map(value => (typeof value === 'string' ? value.toLowerCase() : ''))
           .some(value => value.includes(search))
 
-      return matchesMaterials && matchesItemTypes && matchesSearch
+      const matchesPrice = (!minPrice || product.basePricePence >= parseInt(minPrice) * 100) &&
+                           (!maxPrice || product.basePricePence <= parseInt(maxPrice) * 100)
+
+      return matchesMaterials && matchesItemTypes && matchesSearch && matchesPrice
     })
-  }, [allProducts, searchTerm, selectedMaterials, selectedItemTypes])
+
+    // Sort the filtered products
+    if (sortOption === 'price-low') {
+      filtered.sort((a, b) => a.basePricePence - b.basePricePence)
+    } else if (sortOption === 'price-high') {
+      filtered.sort((a, b) => b.basePricePence - a.basePricePence)
+    } else {
+      filtered.sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    return filtered
+  }, [allProducts, searchTerm, selectedMaterials, selectedItemTypes, minPrice, maxPrice, sortOption])
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchTerm, selectedMaterials, selectedItemTypes])
+  }, [searchTerm, selectedMaterials, selectedItemTypes, minPrice, maxPrice, sortOption])
 
   useEffect(() => {
     const total = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE))
@@ -178,7 +197,7 @@ export default function Shop() {
   const showingStart = filteredProducts.length === 0 ? 0 : startIndex + 1
   const showingEnd = filteredProducts.length === 0 ? 0 : startIndex + pageProducts.length
 
-  const hasActiveFilters = Boolean(searchTerm.trim() || selectedMaterials.length || selectedItemTypes.length)
+  const hasActiveFilters = Boolean(searchTerm.trim() || selectedMaterials.length || selectedItemTypes.length || minPrice || maxPrice || sortOption !== 'name')
 
   const toggleValue = (value, setState) => {
     setState(prev => (
@@ -192,6 +211,9 @@ export default function Shop() {
     setSearchTerm('')
     setSelectedMaterials([])
     setSelectedItemTypes([])
+    setMinPrice('')
+    setMaxPrice('')
+    setSortOption('name')
   }
 
   return (
@@ -232,38 +254,89 @@ export default function Shop() {
               onChange={(event) => setSearchTerm(event.target.value)}
             />
           </div>
+          <div className="field">
+            <label htmlFor="sort-option">Sort by</label>
+            <select
+              id="sort-option"
+              value={sortOption}
+              onChange={(event) => setSortOption(event.target.value)}
+            >
+              <option value="name">Name</option>
+              <option value="price-low">Price: Low to High</option>
+              <option value="price-high">Price: High to Low</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Price range (£)</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <input
+                type="number"
+                placeholder="Min price"
+                value={minPrice}
+                onChange={(event) => setMinPrice(event.target.value)}
+                min="0"
+                step="1"
+              />
+              <input
+                type="number"
+                placeholder="Max price"
+                value={maxPrice}
+                onChange={(event) => setMaxPrice(event.target.value)}
+                min="0"
+                step="1"
+              />
+            </div>
+          </div>
           {materialOptions.length > 0 && (
             <div className="filter-group">
-              <span className="filter-group__label">Materials</span>
-              <div className="filter-group__options">
-                {materialOptions.map(option => (
-                  <label key={option} className="filter-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={selectedMaterials.includes(option)}
-                      onChange={() => toggleValue(option, setSelectedMaterials)}
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
-              </div>
+              <button
+                type="button"
+                className="filter-group__toggle"
+                onClick={() => setMaterialsExpanded(!materialsExpanded)}
+                aria-expanded={materialsExpanded}
+              >
+                Materials
+              </button>
+              {materialsExpanded && (
+                <div className="filter-group__options">
+                  {materialOptions.map(option => (
+                    <label key={option} className="filter-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={selectedMaterials.includes(option)}
+                        onChange={() => toggleValue(option, setSelectedMaterials)}
+                      />
+                      <span>{option}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {itemTypeOptions.length > 0 && (
             <div className="filter-group">
-              <span className="filter-group__label">Piece type</span>
-              <div className="filter-group__options">
-                {itemTypeOptions.map(option => (
-                  <label key={option} className="filter-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={selectedItemTypes.includes(option)}
-                      onChange={() => toggleValue(option, setSelectedItemTypes)}
-                    />
-                    <span>{option}</span>
-                  </label>
-                ))}
-              </div>
+              <button
+                type="button"
+                className="filter-group__toggle"
+                onClick={() => setItemTypesExpanded(!itemTypesExpanded)}
+                aria-expanded={itemTypesExpanded}
+              >
+                Piece type
+              </button>
+              {itemTypesExpanded && (
+                <div className="filter-group__options">
+                  {itemTypeOptions.map(option => (
+                    <label key={option} className="filter-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={selectedItemTypes.includes(option)}
+                        onChange={() => toggleValue(option, setSelectedItemTypes)}
+                      />
+                      <span>{option}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {!materialOptions.length && !itemTypeOptions.length && (
