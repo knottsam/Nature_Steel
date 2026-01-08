@@ -1450,7 +1450,6 @@ nav a:hover { opacity: .9; }
 
 @media (max-width: 900px) {
   nav .inner {
-    flex-wrap: wrap;
     align-items: center;
     padding: 0.5rem;
     position: relative;
