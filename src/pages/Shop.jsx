@@ -4,10 +4,20 @@ import { db, configHealth } from '../firebase'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { products as demoProducts } from '../data/products.js'
 import SEO from '../components/SEO.jsx'
+import { useSiteConfig } from '../context/SiteConfigContext.jsx'
 
 const PAGE_SIZE = 9 // Number of products per page
 
 export default function Shop() {
+  const { config, loading: configLoading } = useSiteConfig()
+  if (!configLoading && !config?.shopEnabled) {
+    return (
+      <section className="card" style={{ maxWidth: 650, margin: '0 auto' }}>
+        <h1 className="h1">Shop</h1>
+        <p className="muted">Our shop is currently offline. Please check back soon or contact us for bespoke furniture.</p>
+      </section>
+    )
+  }
   const demoEnabled = import.meta.env.VITE_ENABLE_DEMO_PRODUCTS === '1'
   const [dbProducts, setDbProducts] = useState(demoEnabled ? [...demoProducts] : [])
   const [loading, setLoading] = useState(demoEnabled ? false : true)

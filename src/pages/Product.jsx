@@ -6,6 +6,7 @@ import { priceForProduct } from '../utils/pricing.js'
 import { formatPrice } from '../utils/currency.js'
 import { SITE_SETTINGS } from '../data/siteSettings.js'
 import { useCart } from '../context/CartContext.jsx'
+import { useSiteConfig } from '../context/SiteConfigContext.jsx'
 import SEO from '../components/SEO.jsx'
 
 const BRAND = 'Nature & Steel Bespoke'
@@ -131,12 +132,29 @@ export default function Product() {
   const [loading, setLoading] = useState(true)
   const [artistId, setArtistId] = useState('none')
   const [selectedMaterial, setSelectedMaterial] = useState('default')
-  const selectedArtist = useMemo(() => {
-    return artistId === 'none' ? null : artists.find(a => a.id === artistId)
-  }, [artistId])
   const { addToCart, products: liveProducts } = useCart()
+  const { config: siteConfig, loading: configLoading } = useSiteConfig()
   const [showAdded, setShowAdded] = useState(false)
   const [toast, setToast] = useState('')
+
+  const selectedArtist = useMemo(() => {
+    return siteConfig.artistPagesEnabled && artistId !== 'none' ? artists.find(a => a.id === artistId) : null
+  }, [artistId, siteConfig.artistPagesEnabled])
+
+  if (!configLoading && !siteConfig?.shopEnabled) {
+    return (
+      <section className="card" style={{ maxWidth: 650, margin: '0 auto' }}>
+        <h1 className="h1">Product</h1>
+        <p className="muted">Our shop is currently offline. Please check back soon or contact us for bespoke furniture.</p>
+      </section>
+    )
+  }
+
+  useEffect(() => {
+    if (!siteConfig.artistPagesEnabled && artistId !== 'none') {
+      setArtistId('none')
+    }
+  }, [siteConfig.artistPagesEnabled, artistId])
 
   useEffect(() => {
     // Prefer live products (real-time) from context; fallback to static
@@ -225,7 +243,7 @@ export default function Product() {
         }}
         breadcrumb={[
           { name: "Home", url: "/" },
-          { name: "Shop", url: "/shop" },
+          ...(siteConfig?.shopEnabled ? [{ name: "Shop", url: "/shop" }] : []),
           { name: product.name, url: window.location.pathname }
         ]}
       />
@@ -246,7 +264,7 @@ export default function Product() {
           <>
             {Array.isArray(product.availableMaterials) && product.availableMaterials.length > 0 && (
               <div className="field">
-                <label>Material</label>
+                <label>Customise item material</label>
                 <select value={selectedMaterial} onChange={e => setSelectedMaterial(e.target.value)}>
                   {product.availableMaterials.map(mat => (
                     <option key={mat} value={mat}>{mat}</option>
@@ -254,20 +272,22 @@ export default function Product() {
                 </select>
               </div>
             )}
-            <div className="field">
-              <label>Customization</label>
-              <select value={artistId} onChange={e => setArtistId(e.target.value)}>
-                <option value="none">No Custom Art (base price)</option>
-                {artists.map(a => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} (+{formatPrice(a.feePence + Math.round(a.feePence * SITE_SETTINGS.markupPercent))})
-                  </option>
-                ))}
-              </select>
-              <small className="muted">
-                Custom price = base + artist fee + {Math.round(SITE_SETTINGS.markupPercent * 100)}% markup.
-              </small>
-            </div>
+            {siteConfig.artistPagesEnabled && (
+              <div className="field">
+                <label>Customization</label>
+                <select value={artistId} onChange={e => setArtistId(e.target.value)}>
+                  <option value="none">No Custom Art (base price)</option>
+                  {artists.map(a => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} (+{formatPrice(a.feePence + Math.round(a.feePence * SITE_SETTINGS.markupPercent))})
+                    </option>
+                  ))}
+                </select>
+                <small className="muted">
+                  Custom price = base + artist fee + {Math.round(SITE_SETTINGS.markupPercent * 100)}% markup.
+                </small>
+              </div>
+            )}
           </>
         ) : (
           <div className="field">
@@ -328,7 +348,7 @@ export default function Product() {
 
         <div className="divider" />
         <p className="muted">
-          Lead time: ~{SITE_SETTINGS.leadTimeBaselineDays} days base, +{SITE_SETTINGS.leadTimeCustomExtraDays} days if customized.
+          Lead time: please allow {SITE_SETTINGS.leadTimeBaselineDays} days, +{SITE_SETTINGS.leadTimeCustomExtraDays} days if customized.
         </p>
         {numericStock != null && (
           <p className="muted">{soldOut ? 'Currently sold out.' : `${numericStock} in stock`}</p>

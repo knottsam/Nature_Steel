@@ -9,6 +9,7 @@ export default function NavBar() {
   const { totalQuantity } = useCart()
   const { config } = useSiteConfig()
   const showArtistsLink = config?.artistsEnabled ?? true
+  const showShopLink = config?.shopEnabled ?? true
   const [menuOpen, setMenuOpen] = useState(false)
   const toggleMenu = () => setMenuOpen(prev => !prev)
   const closeMenu = () => setMenuOpen(false)
@@ -36,7 +37,7 @@ export default function NavBar() {
           <span />
         </button>
         <div className={`nav-links${menuOpen ? ' is-open' : ''}`} id="navigation">
-          <NavLink to="/shop" onClick={handleLinkClick}>Shop</NavLink>
+          {showShopLink && <NavLink to="/shop" onClick={handleLinkClick}>Shop</NavLink>}
           {showArtistsLink && <NavLink to="/artists" onClick={handleLinkClick}>Artists</NavLink>}
           <NavLink to="/about" onClick={handleLinkClick}>About Us</NavLink>
           <NavLink to="/faq" onClick={handleLinkClick}>FAQ</NavLink>

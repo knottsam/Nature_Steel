@@ -209,7 +209,7 @@ export default function Admin() {
       ? item.coverImage
       : (gallery[0] || '');
     setCoverImage(initialCover);
-    setCustomizable(item.customizable !== undefined ? item.customizable : true);
+    setCustomizable(item.customizable !== undefined ? item.customizable : false);
     setAvailableMaterials(Array.isArray(item.availableMaterials) ? item.availableMaterials.join(', ') : '');
     setPublished(!!item.published);
     const isGalleryFeatured = item.galleryFeatured === true;
@@ -362,9 +362,9 @@ export default function Admin() {
       setMaterial('');
       setItemType('');
       setCoverImage('');
-      setCustomizable(true);
+      setCustomizable(false);
       setAvailableMaterials('');
-      setPublished(false);
+      setPublished(true);
   setGalleryFeatured(false);
       setEditingWasGalleryFeatured(false);
     } catch (err) {
@@ -709,19 +709,24 @@ export default function Admin() {
                 onChange={e => setMaterial(e.target.value)}
                 required
               />
-              <div className="admin-materials-row field-full">
+              <div className="admin-materials-row">
                 <input
                   type="text"
                   placeholder="Materials (detailed notes)"
                   value={materials}
                   onChange={e => setMaterials(e.target.value)}
                 />
+              </div>
+              {customizable && (
                 <input
                   type="text"
                   placeholder="Available materials (comma-separated, e.g. Steel, Brass, Copper)"
                   value={availableMaterials}
                   onChange={e => setAvailableMaterials(e.target.value)}
+                  className="available-materials-positioned"
                 />
+              )}
+              <div className="admin-checkboxes-positioned">
                 <div className="admin-checkbox-group">
                   <label className="admin-checkbox">
                     <input
@@ -749,18 +754,6 @@ export default function Admin() {
                     <span className="admin-checkbox__text">Published</span>
                   </label>
                 </div>
-              </div>
-              {customizable && (
-                <input
-                  type="text"
-                  placeholder="Available materials (comma-separated, e.g. Oak, Walnut, Pine)"
-                  value={availableMaterials}
-                  onChange={e => setAvailableMaterials(e.target.value)}
-                  className="field-full"
-                />
-              )}
-              <div className={`admin-gallery-note field-full${galleryWarningActive ? ' is-error' : ''}`}>
-                {galleryWarningActive ? galleryWarningText : galleryStatusText}
               </div>
               <textarea
                 placeholder="Description"
@@ -805,13 +798,17 @@ export default function Admin() {
                 </ul>
               </div>
             )}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleImageChange}
-              style={{ marginBottom: 8 }}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: 8 }}>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleImageChange}
+              />
+              <div className={`admin-gallery-note${galleryWarningActive ? ' is-error' : ''}`}>
+                {galleryWarningActive ? galleryWarningText : galleryStatusText}
+              </div>
+            </div>
             {images.length > 0 && (
               <div style={{ marginBottom: 8 }}>
                 <strong>Selected images:</strong>
@@ -837,7 +834,7 @@ export default function Admin() {
                 setMaterial('');
                 setItemType('');
                 setCoverImage('');
-                setCustomizable(true);
+                setCustomizable(false);
                 setGalleryFeatured(false);
                 setEditingWasGalleryFeatured(false);
                 }}
@@ -1082,8 +1079,8 @@ export default function Admin() {
             <h3 className="h3">Site visibility controls</h3>
             <p className="muted" style={{ marginTop: 0 }}>Toggle the artists directory and artist profiles without redeploying.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {['artistsEnabled', 'artistPagesEnabled'].map((flag) => {
-                const label = flag === 'artistsEnabled' ? 'Artists directory' : 'Artist profile pages'
+              {['artistsEnabled', 'artistPagesEnabled', 'shopEnabled'].map((flag) => {
+                const label = flag === 'artistsEnabled' ? 'Artists directory' : flag === 'artistPagesEnabled' ? 'Artist profile pages' : 'Shop'
                 const enabled = siteConfig?.[flag] ?? DEFAULT_SITE_VISIBILITY[flag]
                 const loadingFlag = toggleLoading[flag]
                 return (
