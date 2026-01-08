@@ -57,6 +57,7 @@ export function CartProvider({ children }) {
             material: d.material ?? d.materials ?? '',
             itemType: d.itemType || '',
             coverImage: cover,
+            availableMaterials: Array.isArray(d.availableMaterials) ? d.availableMaterials : [],
           }
         })
         if (fromDb.length > 0) {
@@ -93,7 +94,7 @@ export function CartProvider({ children }) {
     })
   }, [products])
 
-  function addToCart(productId, artistId = null, qty = 1) {
+  function addToCart(productId, artistId = null, qty = 1, material = null) {
     const product = products.find(p => p.id === productId)
     if (!product) {
       // Can't verify availability yet; block to avoid oversell
@@ -102,13 +103,13 @@ export function CartProvider({ children }) {
     const available = typeof product.stock === 'number' ? product.stock : 1
     if (available <= 0) return { ok: false, reason: 'soldout', available: 0 }
 
-    // Sum quantities already in cart for this product (across artists)
+    // Sum quantities already in cart for this product (across artists and materials)
     const currentTotal = items.filter(i => i.productId === productId).reduce((s, i) => s + i.qty, 0)
     const canAdd = Math.max(0, available - currentTotal)
     if (canAdd <= 0) return { ok: false, reason: 'limit', available }
 
     const toAdd = Math.min(canAdd, qty)
-    const key = `${productId}__${artistId ?? 'none'}`
+    const key = `${productId}__${artistId ?? 'none'}__${material ?? 'default'}`
     setItems(prev => {
       const idx = prev.findIndex(i => i.key === key)
       if (idx >= 0) {
@@ -116,7 +117,7 @@ export function CartProvider({ children }) {
         next[idx] = { ...next[idx], qty: next[idx].qty + toAdd }
         return next
       }
-      return [...prev, { key, productId, artistId, qty: toAdd }]
+      return [...prev, { key, productId, artistId, material, qty: toAdd }]
     })
     return { ok: true, added: toAdd, capped: toAdd < qty, available }
   }

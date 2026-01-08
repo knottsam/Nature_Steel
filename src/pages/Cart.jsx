@@ -65,6 +65,11 @@ export default function Cart() {
                         Artist: {item.artist.name}
                       </div>
                     )}
+                    {item.material && item.material !== 'default' && (
+                      <div className="muted" style={{fontSize:'.9rem'}}>
+                        Material: {item.material}
+                      </div>
+                    )}
                     <div className="muted" style={{fontSize:'.9rem'}}>Unit: {formatPrice(item.unitPrice)}</div>
                   </div>
                 </div>

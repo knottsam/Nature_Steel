@@ -130,6 +130,7 @@ export default function Product() {
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
   const [artistId, setArtistId] = useState('none')
+  const [selectedMaterial, setSelectedMaterial] = useState('default')
   const selectedArtist = useMemo(() => {
     return artistId === 'none' ? null : artists.find(a => a.id === artistId)
   }, [artistId])
@@ -242,20 +243,32 @@ export default function Product() {
         <div className="divider" />
 
         {isCustomizable ? (
-          <div className="field">
-            <label>Customization</label>
-            <select value={artistId} onChange={e => setArtistId(e.target.value)}>
-              <option value="none">No Custom Art (base price)</option>
-              {artists.map(a => (
-                <option key={a.id} value={a.id}>
-                  {a.name} (+{formatPrice(a.feePence + Math.round(a.feePence * SITE_SETTINGS.markupPercent))})
-                </option>
-              ))}
-            </select>
-            <small className="muted">
-              Custom price = base + artist fee + {Math.round(SITE_SETTINGS.markupPercent * 100)}% markup.
-            </small>
-          </div>
+          <>
+            {Array.isArray(product.availableMaterials) && product.availableMaterials.length > 0 && (
+              <div className="field">
+                <label>Material</label>
+                <select value={selectedMaterial} onChange={e => setSelectedMaterial(e.target.value)}>
+                  {product.availableMaterials.map(mat => (
+                    <option key={mat} value={mat}>{mat}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="field">
+              <label>Customization</label>
+              <select value={artistId} onChange={e => setArtistId(e.target.value)}>
+                <option value="none">No Custom Art (base price)</option>
+                {artists.map(a => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} (+{formatPrice(a.feePence + Math.round(a.feePence * SITE_SETTINGS.markupPercent))})
+                  </option>
+                ))}
+              </select>
+              <small className="muted">
+                Custom price = base + artist fee + {Math.round(SITE_SETTINGS.markupPercent * 100)}% markup.
+              </small>
+            </div>
+          </>
         ) : (
           <div className="field">
             <label>Customization</label>
@@ -267,7 +280,7 @@ export default function Product() {
           className="btn"
           disabled={soldOut}
           onClick={() => {
-            const res = addToCart(product.id, selectedArtist?.id, 1)
+            const res = addToCart(product.id, selectedArtist?.id, 1, selectedMaterial)
             if (res && res.ok) {
               setToast('Added to cart')
               setShowAdded(true)

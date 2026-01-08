@@ -13,6 +13,8 @@ export const products = [
 		material: 'Steel',
 		itemType: 'Coffee table',
 		coverImage: 'https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?q=80&w=1200&auto=format&fit=crop',
+		customizable: true,
+		availableMaterials: ['Steel', 'Brass', 'Copper'],
 	},
 	{
 		id: 'demo-2',
@@ -27,5 +29,6 @@ export const products = [
 		material: 'Steel and reclaimed wood',
 		itemType: 'Shelf',
 		coverImage: 'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?q=80&w=1200&auto=format&fit=crop',
+		customizable: false,
 	},
 ]

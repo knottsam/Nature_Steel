@@ -31,6 +31,7 @@ export default function Admin() {
   const [itemType, setItemType] = useState('');
   const [coverImage, setCoverImage] = useState('');
   const [customizable, setCustomizable] = useState(false);
+  const [availableMaterials, setAvailableMaterials] = useState('');
   const [published, setPublished] = useState(true);
   const [galleryFeatured, setGalleryFeatured] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -209,6 +210,7 @@ export default function Admin() {
       : (gallery[0] || '');
     setCoverImage(initialCover);
     setCustomizable(item.customizable !== undefined ? item.customizable : true);
+    setAvailableMaterials(Array.isArray(item.availableMaterials) ? item.availableMaterials.join(', ') : '');
     setPublished(!!item.published);
     const isGalleryFeatured = item.galleryFeatured === true;
     setGalleryFeatured(isGalleryFeatured);
@@ -295,6 +297,10 @@ export default function Admin() {
         throw new Error(`Gallery is full (${galleryCount}/${GALLERY_LIMIT}). Unfeature another piece before adding this one.`);
       }
 
+      const normalizedAvailableMaterials = typeof availableMaterials === 'string' 
+        ? availableMaterials.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+
       const data = {
         name: name.trim(),
         description: description.trim(),
@@ -304,6 +310,7 @@ export default function Admin() {
         material: normalizedMaterial,
         itemType: normalizedItemType,
         customizable,
+        availableMaterials: normalizedAvailableMaterials,
         published,
         galleryFeatured,
         created: editId ? undefined : Timestamp.now(),
@@ -356,6 +363,7 @@ export default function Admin() {
       setItemType('');
       setCoverImage('');
       setCustomizable(true);
+      setAvailableMaterials('');
       setPublished(false);
   setGalleryFeatured(false);
       setEditingWasGalleryFeatured(false);
@@ -708,6 +716,12 @@ export default function Admin() {
                   value={materials}
                   onChange={e => setMaterials(e.target.value)}
                 />
+                <input
+                  type="text"
+                  placeholder="Available materials (comma-separated, e.g. Steel, Brass, Copper)"
+                  value={availableMaterials}
+                  onChange={e => setAvailableMaterials(e.target.value)}
+                />
                 <div className="admin-checkbox-group">
                   <label className="admin-checkbox">
                     <input
@@ -736,6 +750,15 @@ export default function Admin() {
                   </label>
                 </div>
               </div>
+              {customizable && (
+                <input
+                  type="text"
+                  placeholder="Available materials (comma-separated, e.g. Oak, Walnut, Pine)"
+                  value={availableMaterials}
+                  onChange={e => setAvailableMaterials(e.target.value)}
+                  className="field-full"
+                />
+              )}
               <div className={`admin-gallery-note field-full${galleryWarningActive ? ' is-error' : ''}`}>
                 {galleryWarningActive ? galleryWarningText : galleryStatusText}
               </div>
