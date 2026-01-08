@@ -8,7 +8,7 @@ export const products = [
 		images: [
 			'https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?q=80&w=1200&auto=format&fit=crop',
 		],
-		basePricePence: 35000,
+		basePricePence: 350,
 		materials: 'Steel, lacquer',
 		material: 'Steel',
 		itemType: 'Coffee table',
@@ -24,7 +24,7 @@ export const products = [
 		images: [
 			'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?q=80&w=1200&auto=format&fit=crop',
 		],
-		basePricePence: 22000,
+		basePricePence: 220,
 		materials: 'Steel, reclaimed wood',
 		material: 'Steel and reclaimed wood',
 		itemType: 'Shelf',
