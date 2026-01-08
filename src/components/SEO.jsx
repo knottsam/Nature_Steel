@@ -69,6 +69,42 @@ function buildStructuredData(canonicalHref, title, description, imageUrl) {
         url: CANONICAL_DOMAIN,
         description: DEFAULT_DESCRIPTION,
         logo: DEFAULT_IMAGE_URL,
+        foundingDate: '2020',
+        knowsAbout: [
+          'Handcrafted furniture',
+          'Bespoke furniture',
+          'Woodworking',
+          'Metalworking',
+          'Custom art pieces',
+          'Handmade bowls',
+          'Handmade vases',
+          'Handmade pens'
+        ],
+        hasOfferCatalog: {
+          '@type': 'OfferCatalog',
+          name: 'Nature & Steel Bespoke Collection',
+          itemListElement: [
+            {
+              '@type': 'Offer',
+              itemOffered: {
+                '@type': 'Product',
+                name: 'Handcrafted Furniture'
+              }
+            },
+            {
+              '@type': 'Offer',
+              itemOffered: {
+                '@type': 'Product',
+                name: 'Bespoke Art Pieces'
+              }
+            }
+          ]
+        },
+        sameAs: [
+          // Add social media URLs here when available
+          // 'https://www.instagram.com/natureandsteel',
+          // 'https://www.facebook.com/natureandsteel'
+        ]
       },
       {
         '@type': 'WebSite',
@@ -77,6 +113,14 @@ function buildStructuredData(canonicalHref, title, description, imageUrl) {
         url: CANONICAL_DOMAIN,
         description: DEFAULT_DESCRIPTION,
         publisher: { '@id': ORGANIZATION_ID },
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: {
+            '@type': 'EntryPoint',
+            urlTemplate: `${CANONICAL_DOMAIN}/shop?search={search_term_string}`
+          },
+          'query-input': 'required name=search_term_string'
+        }
       },
       {
         '@type': 'WebPage',
@@ -86,6 +130,9 @@ function buildStructuredData(canonicalHref, title, description, imageUrl) {
         isPartOf: { '@id': WEBSITE_ID },
         about: { '@id': ORGANIZATION_ID },
         image: imageUrl,
+        primaryImageOfPage: imageUrl,
+        datePublished: '2020-01-01',
+        dateModified: new Date().toISOString().split('T')[0]
       },
     ],
   }

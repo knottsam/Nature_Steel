@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useCart } from '../context/CartContext.jsx'
 import { formatPrice } from '../utils/currency.js'
 import SEO from '../components/SEO.jsx'
+import { trackViewCart } from '../utils/analytics.js'
 
 export default function Cart() {
   const { items, subtotal, removeFromCart, updateQty, cleanupTick } = useCart()
@@ -15,6 +16,14 @@ export default function Cart() {
       return () => clearTimeout(t)
     }
   }, [cleanupTick])
+
+  // Track cart view
+  useEffect(() => {
+    if (items.length > 0) {
+      trackViewCart(items, subtotal)
+    }
+  }, [items, subtotal])
+
   if (items.length === 0) {
     return (
       <div>
@@ -54,7 +63,7 @@ export default function Cart() {
               <div key={item.key} className="cart-item" style={{marginBottom:'1rem', opacity: p ? 1 : 0.75}}>
                 <div className="cart-item-inner row" style={{alignItems:'center'}}>
                   {img ? (
-                    <img src={img} alt={name} style={{width:96, height:96, objectFit:'cover'}} />
+                    <img src={img} alt={name} style={{width:96, height:96, objectFit:'cover'}} loading="lazy" />
                   ) : (
                     <div style={{width:96, height:96, background:'#eee', borderRadius:4}} />
                   )}

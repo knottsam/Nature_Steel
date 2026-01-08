@@ -27,7 +27,10 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.26",
-    "vite": "^5.4.3"
+    "terser": "^5.44.1",
+    "vite": "^5.4.3",
+    "vite-plugin-imagemin": "^0.6.1",
+    "web-vitals": "^5.1.0"
   },
   "engines": {
     "node": "20.x"

@@ -8,7 +8,7 @@ import logoImage from '../assets/images/N&S_logo.png'
 export default function NavBar() {
   const { totalQuantity } = useCart()
   const { config } = useSiteConfig()
-  const showArtistsLink = config?.artistsEnabled ?? true
+  const showArtistsLink = (config?.artistsEnabled ?? true) && (config?.artistPagesEnabled ?? true)
   const showShopLink = config?.shopEnabled ?? true
   const [menuOpen, setMenuOpen] = useState(false)
   const toggleMenu = () => setMenuOpen(prev => !prev)
@@ -19,7 +19,7 @@ export default function NavBar() {
   }
 
   return (
-    <nav>
+    <nav id="navigation">
       <div className="inner">
         <Link className="logo" to="/" onClick={handleLinkClick}>
           <img className="logo-mark" src={logoImage} alt="Nature & Steel Bespoke logo" />

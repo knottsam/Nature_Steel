@@ -5,6 +5,7 @@ import { useCart } from '../context/CartContext.jsx'
 import { formatPrice } from '../utils/currency.js'
 import { functions } from '../firebase'
 import SEO from '../components/SEO.jsx'
+import { trackBeginCheckout } from '../utils/analytics.js'
 
 function readEnvSquareConfig() {
   const rawAppId = import.meta.env?.VITE_SQUARE_APPLICATION_ID
@@ -66,6 +67,13 @@ export default function Checkout() {
   }, [squareConfig, fetchSquareConfig])
 
   const totalItems = useMemo(() => items.reduce((sum, item) => sum + Number(item.qty || 0), 0), [items])
+
+  // Track begin checkout
+  useEffect(() => {
+    if (items.length > 0 && subtotal > 0) {
+      trackBeginCheckout(items, subtotal)
+    }
+  }, [items, subtotal])
 
   const startHostedCheckout = useCallback(
     async (event) => {

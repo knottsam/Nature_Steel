@@ -223,7 +223,7 @@ export default function Home() {
                 onFocus={() => setActive(index)}
                 onTouchStart={() => setActive(index)}
               >
-                <img src={p.images[0]} alt={p.name} />
+                <img src={p.images[0]} alt={p.name} loading="lazy" />
               </Link>
             )
           })}

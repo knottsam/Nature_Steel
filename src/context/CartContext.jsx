@@ -4,6 +4,7 @@ import { products as demoProducts } from '../data/products.js'
 import { priceForProduct } from '../utils/pricing.js'
 import { db, configHealth } from '../firebase'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import { trackAddToCart, trackRemoveFromCart, trackViewCart, trackBeginCheckout } from '../utils/analytics.js'
 
 const CartContext = createContext(null)
 const STORAGE_KEY = 'cart_v1'
@@ -119,10 +120,20 @@ export function CartProvider({ children }) {
       }
       return [...prev, { key, productId, artistId, material, qty: toAdd }]
     })
+    // Track add to cart event
+    trackAddToCart(product, toAdd)
     return { ok: true, added: toAdd, capped: toAdd < qty, available }
   }
 
   function removeFromCart(key) {
+    // Find the item before removing it for tracking
+    const itemToRemove = items.find(i => i.key === key)
+    if (itemToRemove) {
+      const product = products.find(p => p.id === itemToRemove.productId)
+      if (product) {
+        trackRemoveFromCart(product, itemToRemove.qty)
+      }
+    }
     setItems(prev => prev.filter(i => i.key !== key))
   }
 

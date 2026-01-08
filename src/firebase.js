@@ -5,6 +5,7 @@ import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { getAnalytics, isSupported } from 'firebase/analytics';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -65,6 +66,21 @@ if (appCheckKey) {
 
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// Initialize Analytics (only in production and when supported)
+export let analytics = null;
+if (import.meta.env.PROD && import.meta.env.VITE_FIREBASE_MEASUREMENT_ID) {
+  isSupported().then((supported) => {
+    if (supported) {
+      analytics = getAnalytics(app);
+      console.log('[firebase] Analytics initialized');
+    } else {
+      console.log('[firebase] Analytics not supported in this environment');
+    }
+  }).catch((error) => {
+    console.warn('[firebase] Analytics initialization failed:', error);
+  });
+}
 // Prefer a custom Functions domain if provided (great when Firebase web config isn't set locally)
 const customDomain = import.meta.env.VITE_FIREBASE_FUNCTIONS_CUSTOM_DOMAIN || undefined;
 const region = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || undefined;

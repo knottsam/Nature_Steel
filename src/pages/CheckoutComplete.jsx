@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import SEO from '../components/SEO.jsx'
 import { useCart } from '../context/CartContext.jsx'
+import { trackPurchase } from '../utils/analytics.js'
 
 function formatStatus(status) {
   if (!status) return null
@@ -39,6 +40,19 @@ export default function CheckoutComplete() {
   const receiptUrl = searchParams.get('receiptUrl') || searchParams.get('receipt_url')
   const rawStatus = searchParams.get('status') || searchParams.get('statusCode')
   const displayStatus = formatStatus(rawStatus) || 'Completed'
+
+  // Track successful purchase
+  useEffect(() => {
+    if (identifiers.length > 0) {
+      // We don't have the cart items here since they were cleared, so we'll track with minimal data
+      const orderDetails = {
+        orderId: searchParams.get('order') || searchParams.get('orderId'),
+        transactionId: searchParams.get('transactionId') || searchParams.get('transaction_id')
+      }
+      // Track purchase with empty cart items since they're cleared, but we know there was a purchase
+      trackPurchase(orderDetails, [], 0)
+    }
+  }, [identifiers, searchParams])
 
   return (
     <div className='card'>

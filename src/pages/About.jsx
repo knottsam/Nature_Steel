@@ -7,6 +7,10 @@ export default function About() {
       <SEO
         title="About Nature & Steel Bespoke | Handcrafted Furniture Makers"
         description="Learn about Nature & Steel Bespoke, creators of durable, timeless handcrafted furniture and bespoke art pieces. We build unique statement pieces without breaking the bank."
+        breadcrumb={[
+          { name: "Home", url: "/" },
+          { name: "About Us", url: "/about" }
+        ]}
       />
       <div>
         <h1 className="h1">About Us</h1>
@@ -20,6 +24,7 @@ export default function About() {
               src="https://images.unsplash.com/photo-1556157382-97eda2d62296?q=80&w=400&auto=format&fit=crop"
               alt="Mark - Portrait"
               style={{ width: '100%', height: '300px', objectFit: 'cover', borderRadius: '8px', marginBottom: '1rem' }}
+              loading="lazy"
             />
             <h2>Hi, I'm Mark</h2>
             <p>
@@ -35,6 +40,7 @@ export default function About() {
               src="https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=400&auto=format&fit=crop"
               alt="Sam - Portrait"
               style={{ width: '100%', height: '300px', objectFit: 'cover', borderRadius: '8px', marginBottom: '1rem' }}
+              loading="lazy"
             />
             <h2>Hi, I’m Sam</h2>
             <p>

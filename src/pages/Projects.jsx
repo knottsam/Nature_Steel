@@ -70,6 +70,10 @@ export default function Projects() {
       <SEO
         title="Recent Projects Gallery | Nature & Steel Bespoke"
         description="View our portfolio of recent commissions, collaborations, and bespoke furniture projects. See examples of our handcrafted work and custom designs."
+        breadcrumb={[
+          { name: "Home", url: "/" },
+          { name: "Projects", url: "/projects" }
+        ]}
       />
       <div>
       <h1 className="h1">Projects</h1>

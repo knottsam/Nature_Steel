@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import ProductCard from '../components/ProductCard.jsx'
+import LoadingSkeleton from '../components/LoadingSkeleton.jsx'
 import { db, configHealth } from '../firebase'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { products as demoProducts } from '../data/products.js'
 import SEO from '../components/SEO.jsx'
 import { useSiteConfig } from '../context/SiteConfigContext.jsx'
+import { trackSearch, trackFilterUsed } from '../utils/analytics.js'
 
 const PAGE_SIZE = 9 // Number of products per page
 
@@ -21,6 +23,7 @@ export default function Shop() {
   const demoEnabled = import.meta.env.VITE_ENABLE_DEMO_PRODUCTS === '1'
   const [dbProducts, setDbProducts] = useState(demoEnabled ? [...demoProducts] : [])
   const [loading, setLoading] = useState(demoEnabled ? false : true)
+  const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedMaterials, setSelectedMaterials] = useState([])
   const [selectedItemTypes, setSelectedItemTypes] = useState([])
@@ -77,11 +80,13 @@ export default function Shop() {
         },
         (err) => {
           console.warn('[Shop] Firestore subscription error:', err)
+          setError('Failed to load products. Please check your connection and try again.')
           setLoading(false)
         }
       )
     } catch (e) {
       console.error('[Shop] Failed to subscribe to furniture collection:', e)
+      setError('Failed to connect to the database. Please try again later.')
       setLoading(false)
     }
     return () => { try { unsub && unsub() } catch {} }
@@ -183,12 +188,43 @@ export default function Shop() {
     setCurrentPage(1)
   }, [searchTerm, selectedMaterials, selectedItemTypes, minPrice, maxPrice, sortOption])
 
+  // Track search events
+  useEffect(() => {
+    if (searchTerm.trim()) {
+      trackSearch(searchTerm.trim(), filteredProducts.length)
+    }
+  }, [searchTerm, filteredProducts.length])
+
+  // Track filter usage
+  useEffect(() => {
+    if (selectedMaterials.length > 0) {
+      selectedMaterials.forEach(material => {
+        trackFilterUsed('material', material)
+      })
+    }
+  }, [selectedMaterials])
+
+  useEffect(() => {
+    if (selectedItemTypes.length > 0) {
+      selectedItemTypes.forEach(type => {
+        trackFilterUsed('item_type', type)
+      })
+    }
+  }, [selectedItemTypes])
+
   useEffect(() => {
     const total = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE))
     if (currentPage > total) {
       setCurrentPage(total)
     }
   }, [filteredProducts.length, currentPage])
+
+  useEffect(() => {
+    if (!filtersCollapsed) {
+      setMaterialsExpanded(false)
+      setItemTypesExpanded(false)
+    }
+  }, [filtersCollapsed])
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE))
   const startIndex = (currentPage - 1) * PAGE_SIZE
@@ -221,28 +257,21 @@ export default function Shop() {
       <SEO
         title="Shop Custom Handcrafted Furniture | Nature & Steel Bespoke"
         description="Browse our collection of bespoke handcrafted furniture, bowls, vases, pens, and art pieces. Each item is made to order with customization options available."
+        breadcrumb={[
+          { name: "Home", url: "/" },
+          { name: "Shop", url: "/shop" }
+        ]}
       />
       <div>
-      <h1 className="h1">Nature & Steel Bespoke Collection</h1>
-      <p className="muted">Fine core pieces. Built to order. Choose customization if you want it.</p>
+      <header>
+        <h1 className="h1">Nature & Steel Bespoke Collection</h1>
+        <p className="muted">Fine core pieces. Built to order. Choose customization if you want it.</p>
+      </header>
       <div className="spacer" />
       <div className="shop-layout">
-        <aside className={`shop-filters ${filtersCollapsed ? 'is-collapsed' : ''}`} aria-label="Filters">
+        <aside className="shop-filters" aria-label="Filters">
           <div className="shop-filters__header">
-            <h2 className="h2">Filter & Search</h2>
-            <button
-              type="button"
-              className="shop-filters__toggle"
-              onClick={() => setFiltersCollapsed(!filtersCollapsed)}
-              aria-label={filtersCollapsed ? 'Show filters' : 'Hide filters'}
-            >
-              {filtersCollapsed ? 'Filter' : 'Less'}
-            </button>
-            {hasActiveFilters && (
-              <button type="button" className="btn ghost" onClick={clearFilters}>
-                Clear filters
-              </button>
-            )}
+            <h2 className="h2">Search & Filter</h2>
           </div>
           <div className="field">
             <label htmlFor="shop-search">Search the collection</label>
@@ -254,6 +283,21 @@ export default function Shop() {
               onChange={(event) => setSearchTerm(event.target.value)}
             />
           </div>
+          <button
+            type="button"
+            className="shop-filters__toggle"
+            onClick={() => setFiltersCollapsed(!filtersCollapsed)}
+            aria-label={filtersCollapsed ? 'Show filters' : 'Hide filters'}
+            aria-expanded={!filtersCollapsed}
+          >
+            Filter
+          </button>
+          {hasActiveFilters && (
+            <button type="button" className="btn ghost" onClick={clearFilters} aria-label="Clear all active filters">
+              Clear filters
+            </button>
+          )}
+          <div className={`shop-filters__groups ${filtersCollapsed ? 'is-collapsed' : ''}`}>
           <div className="field">
             <label htmlFor="sort-option">Sort by</label>
             <select
@@ -294,17 +338,19 @@ export default function Shop() {
                 className="filter-group__toggle"
                 onClick={() => setMaterialsExpanded(!materialsExpanded)}
                 aria-expanded={materialsExpanded}
+                aria-controls="materials-filter-options"
               >
                 Materials
               </button>
               {materialsExpanded && (
-                <div className="filter-group__options">
+                <div className="filter-group__options" id="materials-filter-options">
                   {materialOptions.map(option => (
                     <label key={option} className="filter-checkbox">
                       <input
                         type="checkbox"
                         checked={selectedMaterials.includes(option)}
                         onChange={() => toggleValue(option, setSelectedMaterials)}
+                        aria-describedby={`materials-${option.replace(/\s+/g, '-').toLowerCase()}-count`}
                       />
                       <span>{option}</span>
                     </label>
@@ -320,17 +366,19 @@ export default function Shop() {
                 className="filter-group__toggle"
                 onClick={() => setItemTypesExpanded(!itemTypesExpanded)}
                 aria-expanded={itemTypesExpanded}
+                aria-controls="item-types-filter-options"
               >
                 Piece type
               </button>
               {itemTypesExpanded && (
-                <div className="filter-group__options">
+                <div className="filter-group__options" id="item-types-filter-options">
                   {itemTypeOptions.map(option => (
                     <label key={option} className="filter-checkbox">
                       <input
                         type="checkbox"
                         checked={selectedItemTypes.includes(option)}
                         onChange={() => toggleValue(option, setSelectedItemTypes)}
+                        aria-describedby={`item-types-${option.replace(/\s+/g, '-').toLowerCase()}-count`}
                       />
                       <span>{option}</span>
                     </label>
@@ -342,10 +390,33 @@ export default function Shop() {
           {!materialOptions.length && !itemTypeOptions.length && (
             <small className="muted">Filters appear once products are available.</small>
           )}
+          </div>
         </aside>
         <section className="shop-results">
-          {loading ? (
-            <div>Loading...</div>
+          {/* Screen reader announcements for dynamic content */}
+          <div aria-live="polite" aria-atomic="true" className="sr-only">
+            {loading ? 'Loading products...' : 
+             error ? `Error: ${error}` :
+             `Showing ${filteredProducts.length} of ${allProducts.length} products`}
+          </div>
+
+          {error ? (
+            <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
+              <h3 className="h3" style={{ color: 'var(--error, #d32f2f)' }}>Unable to Load Products</h3>
+              <p className="muted">{error}</p>
+              <button
+                className="btn"
+                onClick={() => {
+                  setError(null)
+                  setLoading(true)
+                  window.location.reload()
+                }}
+              >
+                Try Again
+              </button>
+            </div>
+          ) : loading ? (
+            <LoadingSkeleton type="grid" count={9} />
           ) : (
             <>
               {filteredProducts.length > 0 ? (

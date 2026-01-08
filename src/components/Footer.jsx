@@ -1,7 +1,10 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
+import { useSiteConfig } from '../context/SiteConfigContext.jsx'
 
 export default function Footer() {
+  const { config } = useSiteConfig()
+
   return (
     <footer>
       <div className="container">
@@ -14,7 +17,7 @@ export default function Footer() {
             <div className="h3">Explore</div>
             <ul className="footer-links">
               <li><Link to="/shop">Shop</Link></li>
-              <li><Link to="/artists">Artists</Link></li>
+              {(config.artistsEnabled && config.artistPagesEnabled) && <li><Link to="/artists">Artists</Link></li>}
               <li><Link to="/faq">FAQ</Link></li>
             </ul>
           </div>

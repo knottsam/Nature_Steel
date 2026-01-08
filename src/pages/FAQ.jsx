@@ -8,6 +8,48 @@ export default function FAQ() {
       <SEO
         title="FAQ & Ordering Process | Nature & Steel Bespoke"
         description="Frequently asked questions about our handcrafted furniture process, lead times, customization options, pricing, and how to order bespoke pieces."
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "How is pricing calculated?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Base price, plus a transparent markup to cover handling and coordination."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I return a custom piece?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Custom pieces are final sale unless there is a manufacturing defect. Contact us within 7 days of delivery."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do I care for my piece?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Use a soft cloth; avoid abrasive cleaners on all surfaces. Keep away from prolonged direct sunlight. Most pieces are finished in a natural oil or wax, which should be reapplied periodically to maintain the finish."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do I reapply the finish?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Reapply natural oil or wax finishes as needed, typically every 6-12 months, depending on use and exposure."
+              }
+            }
+          ]
+        }}
+        breadcrumb={[
+          { name: "Home", url: "/" },
+          { name: "FAQ", url: "/faq" }
+        ]}
       />
       <div>
       <h1 className="h1">FAQ & Process</h1>

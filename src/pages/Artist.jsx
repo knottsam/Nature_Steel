@@ -34,6 +34,11 @@ export default function Artist() {
         title={`${artist.name} - Custom Artist | Nature & Steel Bespoke`}
         description={`Meet ${artist.name}, one of our talented artists specializing in bespoke custom artwork for furniture. ${artist.bio || 'Explore their unique style and portfolio.'}`}
         image={artist.thumbnail}
+        breadcrumb={[
+          { name: "Home", url: "/" },
+          { name: "Artists", url: "/artists" },
+          { name: artist.name, url: `/artist/${artist.id}` }
+        ]}
       />
       <div>
       <div className="grid" style={{gridTemplateColumns:'1.125fr 3fr 2fr', gap:'2rem', alignItems: 'stretch'}}>

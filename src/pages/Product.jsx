@@ -8,6 +8,7 @@ import { SITE_SETTINGS } from '../data/siteSettings.js'
 import { useCart } from '../context/CartContext.jsx'
 import { useSiteConfig } from '../context/SiteConfigContext.jsx'
 import SEO from '../components/SEO.jsx'
+import { trackProductView } from '../utils/analytics.js'
 
 const BRAND = 'Nature & Steel Bespoke'
 const DEFAULT_DESCRIPTION = 'Handcrafted furniture, bowls, vases, pens, and art-ready pieces. Built to order with bespoke options from Nature & Steel Bespoke.'
@@ -62,8 +63,8 @@ function ImageCarousel({ images }) {
           <img src={images[index]} alt={`Product ${index + 1}`} style={{ width: '100%', borderRadius: 8, transition: 'box-shadow .2s' }} />
           {images.length > 1 && (
             <>
-              <button onClick={e => { prev(e); }} style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.4)', color: '#fff', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer' }}>&lt;</button>
-              <button onClick={e => { next(e); }} style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.4)', color: '#fff', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer' }}>&gt;</button>
+              <button onClick={e => { prev(e); }} style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.4)', color: '#fff', border: 'none', borderRadius: '50%', width: 44, height: 44, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>&lt;</button>
+              <button onClick={e => { next(e); }} style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.4)', color: '#fff', border: 'none', borderRadius: '50%', width: 44, height: 44, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>&gt;</button>
             </>
           )}
         </div>
@@ -75,7 +76,8 @@ function ImageCarousel({ images }) {
                 src={src}
                 alt={`Thumb ${i + 1}`}
                 onClick={e => select(i, e)}
-                style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4, border: i === index ? '2px solid #333' : '1px solid #ccc', cursor: 'pointer', opacity: i === index ? 1 : 0.7 }}
+                style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 4, border: i === index ? '2px solid #333' : '1px solid #ccc', cursor: 'pointer', opacity: i === index ? 1 : 0.7 }}
+                loading="lazy"
               />
             ))}
           </div>
@@ -115,7 +117,8 @@ function ImageCarousel({ images }) {
                   src={src}
                   alt={`Thumb ${i + 1}`}
                   onClick={e => { select(i, e); }}
-                  style={{ width: 54, height: 54, objectFit: 'cover', borderRadius: 6, border: i === index ? '2.5px solid #ffe6a0' : '1.5px solid #888', cursor: 'pointer', opacity: i === index ? 1 : 0.7, background: '#222' }}
+                  style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: i === index ? '2.5px solid #ffe6a0' : '1.5px solid #888', cursor: 'pointer', opacity: i === index ? 1 : 0.7, background: '#222' }}
+                  loading="lazy"
                 />
               ))}
             </div>
@@ -164,12 +167,16 @@ export default function Product() {
       if (p.price && !p.basePricePence) p.basePricePence = p.price
       setProduct(p)
       setLoading(false)
+      // Track product view
+      trackProductView(p)
       return
     }
     const foundStatic = products.find(p => p.slug === slug)
     if (foundStatic) {
       setProduct(foundStatic)
       setLoading(false)
+      // Track product view
+      trackProductView(foundStatic)
       return
     }
     // If neither found yet, stay loading until liveProducts updates
@@ -224,6 +231,7 @@ export default function Product() {
           "name": product.name,
           "description": product.description || summaryLine,
           "image": images,
+          "sku": product.id,
           "brand": {
             "@type": "Brand",
             "name": "Nature & Steel Bespoke"
@@ -232,14 +240,32 @@ export default function Product() {
             "@type": "Offer",
             "price": price / 100,
             "priceCurrency": "GBP",
-            "availability": "https://schema.org/InStock",
+            "availability": product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
             "seller": {
               "@type": "Organization",
               "name": "Nature & Steel Bespoke"
-            }
+            },
+            "priceValidUntil": new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // Valid for 1 year
           },
           "material": product.material,
-          "category": product.itemType
+          "category": product.itemType,
+          "additionalProperty": [
+            {
+              "@type": "PropertyValue",
+              "name": "Customizable",
+              "value": isCustomizable ? "Yes" : "No"
+            },
+            ...(product.material ? [{
+              "@type": "PropertyValue",
+              "name": "Material",
+              "value": product.material
+            }] : []),
+            ...(product.itemType ? [{
+              "@type": "PropertyValue",
+              "name": "Item Type",
+              "value": product.itemType
+            }] : [])
+          ]
         }}
         breadcrumb={[
           { name: "Home", url: "/" },

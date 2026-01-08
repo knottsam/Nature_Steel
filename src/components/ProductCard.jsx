@@ -18,17 +18,17 @@ export default function ProductCard({ product }) {
   })()
   return (
     <article className="card product-card">
-      <Link to={`/product/${product.slug}`} className="product-card__media">
-        {heroImage && <img src={heroImage} alt={product.name} />}
-        {soldOut && <span className="product-card__badge">Sold out</span>}
+      <Link to={`/product/${product.slug}`} className="product-card__media" aria-label={`View ${product.name} details`}>
+        {heroImage && <img src={heroImage} alt={product.name} loading="lazy" />}
+        {soldOut && <span className="product-card__badge" aria-label="This item is sold out">Sold out</span>}
       </Link>
       <div className="product-card__body">
         <div className="row product-card__header">
           <h3 className="product-card__title">{product.name}</h3>
-          <div className="price">{formatPrice(price)}</div>
+          <div className="price" aria-label={`Price: ${formatPrice(price)}`}>{formatPrice(price)}</div>
         </div>
         {subtitle && <p className="muted product-card__subtitle">{subtitle}</p>}
-        <Link className="btn block product-card__cta" to={`/product/${product.slug}`}>View</Link>
+        <Link className="btn block product-card__cta" to={`/product/${product.slug}`} aria-label={`View details for ${product.name}`}>View</Link>
       </div>
     </article>
   )
