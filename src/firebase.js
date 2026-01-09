@@ -43,33 +43,47 @@ if (!configHealth.ok) {
 
 let app;
 try {
+  // Validate required config before initializing
+  const missingRequired = requiredKeys.filter(k => !import.meta.env[k] || import.meta.env[k].trim() === '');
+  if (missingRequired.length > 0) {
+    throw new Error(`Missing required Firebase config: ${missingRequired.join(', ')}`);
+  }
+  
+  console.log('[firebase] Initializing Firebase app with config:', {
+    projectId: firebaseConfig.projectId,
+    authDomain: firebaseConfig.authDomain,
+    hasApiKey: !!firebaseConfig.apiKey,
+    hasAppId: !!firebaseConfig.appId,
+  });
+  
   app = initializeApp(firebaseConfig);
   console.log('[firebase] Firebase app initialized successfully');
 } catch (error) {
   console.error('[firebase] Failed to initialize Firebase app:', error);
-  throw error;
+  // Don't throw here - let the app continue without Firebase
+  app = null;
 }
 export { app };
 // Optional App Check: requires VITE_FIREBASE_APPCHECK_KEY (reCAPTCHA v3 site key)
 const appCheckKey = import.meta.env.VITE_FIREBASE_APPCHECK_KEY;
-if (appCheckKey) {
+if (app && appCheckKey && appCheckKey.trim()) {
   // Allow a debug token in local dev for easier testing
   if (import.meta.env.FIREBASE_APPCHECK_DEBUG_TOKEN) {
     // eslint-disable-next-line no-undef
     self.FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.FIREBASE_APPCHECK_DEBUG_TOKEN;
   }
   initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider(appCheckKey),
+    provider: new ReCaptchaV3Provider(appCheckKey.trim()),
     isTokenAutoRefreshEnabled: true,
   });
 }
 
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+export const db = app ? getFirestore(app) : null;
+export const storage = app ? getStorage(app) : null;
 
 // Initialize Analytics (only in production and when supported)
 export let analytics = null;
-if (import.meta.env.PROD && import.meta.env.VITE_FIREBASE_MEASUREMENT_ID) {
+if (app && import.meta.env.PROD && import.meta.env.VITE_FIREBASE_MEASUREMENT_ID) {
   isSupported().then((supported) => {
     if (supported) {
       analytics = getAnalytics(app);
@@ -83,11 +97,17 @@ if (import.meta.env.PROD && import.meta.env.VITE_FIREBASE_MEASUREMENT_ID) {
 }
 // Prefer a custom Functions domain if provided (great when Firebase web config isn't set locally)
 const customDomain = import.meta.env.VITE_FIREBASE_FUNCTIONS_CUSTOM_DOMAIN || undefined;
-const region = import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || undefined;
-export const functions = getFunctions(app, region || undefined);
+const region = import.meta.env.VITE_FIREBASE_FUNCTIONS_CUSTOM_DOMAIN ? undefined : (import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || undefined);
+export const functions = app ? getFunctions(app, region) : null;
+
+if (functions) {
+  console.log('[firebase] Functions initialized', { region, customDomain });
+} else {
+  console.warn('[firebase] Functions not initialized - app is null');
+}
 
 // Optional: connect to Functions emulator if enabled via env flag
-if (import.meta.env.VITE_USE_FUNCTIONS_EMULATOR === '1') {
+if (functions && import.meta.env.VITE_USE_FUNCTIONS_EMULATOR === '1') {
   try {
     connectFunctionsEmulator(functions, 'localhost', 5001);
     console.log('[firebase] Connected Functions to emulator at localhost:5001');

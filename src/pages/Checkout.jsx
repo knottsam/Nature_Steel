@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { httpsCallable } from 'firebase/functions'
 import { useCart } from '../context/CartContext.jsx'
 import { formatPrice } from '../utils/currency.js'
-import { functions } from '../firebase'
+import { functions, app } from '../firebase'
 import SEO from '../components/SEO.jsx'
 import { trackBeginCheckout } from '../utils/analytics.js'
 
@@ -92,6 +92,12 @@ export default function Checkout() {
 
       setLoading(true)
       try {
+        if (!app) {
+          throw new Error('Firebase app not initialized. Please check your configuration and refresh the page.')
+        }
+        if (!functions) {
+          throw new Error('Firebase functions not initialized. Please check your configuration and refresh the page.')
+        }
         const createLink = httpsCallable(functions, 'createSquareCheckoutLink')
         const itemsSummary = items
           .map((item) => `${item.product?.name || 'Item'} x${item.qty}`)
