@@ -9,6 +9,10 @@ export default function Cart() {
   const { items, subtotal, removeFromCart, updateQty, cleanupTick } = useCart()
   const [showCleanup, setShowCleanup] = useState(false)
 
+  // Calculate totals
+  const totalItemCost = items.reduce((sum, item) => sum + item.unitPrice * item.qty, 0)
+  const totalDeliveryCost = items.reduce((sum, item) => sum + (item.deliveryCost || 0) * item.qty, 0)
+
   useEffect(() => {
     if (cleanupTick > 0) {
       setShowCleanup(true)
@@ -79,10 +83,19 @@ export default function Cart() {
                         Material: {item.material}
                       </div>
                     )}
-                    <div className="muted" style={{fontSize:'.9rem'}}>Unit: {formatPrice(item.unitPrice)}</div>
+                    {typeof item.product?.stock === 'number' && item.product.stock <= 5 && item.product.stock > 0 && (
+                      <div className="muted" style={{fontSize:'.9rem', color: item.product.stock <= 2 ? '#d73a49' : '#d29922'}}>
+                        {item.product.stock <= 2 ? 'Only ' + item.product.stock + ' left' : 'Low stock'}
+                      </div>
+                    )}
+                    <div className="muted" style={{fontSize:'.9rem'}}>Item: {formatPrice(item.unitPrice)}</div>
+                    {item.deliveryCost > 0 && (
+                      <div className="muted" style={{fontSize:'.9rem'}}>Delivery: {formatPrice(item.deliveryCost)}</div>
+                    )}
+                    <div className="muted" style={{fontSize:'.9rem'}}>Unit total: {formatPrice(item.unitPrice + (item.deliveryCost || 0))}</div>
                   </div>
                 </div>
-                <div className="cart-item-controls row" style={{gap:'0.75rem'}}>
+                <div className="cart-item-controls row" style={{gap:'0.75rem', marginTop: '1rem'}}>
                   <input
                     type="number"
                     min="1"
@@ -101,11 +114,30 @@ export default function Cart() {
         <div>
           <div className="card cart-summary-card">
             <div className="row" style={{justifyContent:'space-between'}}>
-              <div>Subtotal</div>
+              <div>Items</div>
+              <div>{formatPrice(totalItemCost)}</div>
+            </div>
+            {totalDeliveryCost > 0 && (
+              <div className="row" style={{justifyContent:'space-between'}}>
+                <div>Delivery</div>
+                <div>{formatPrice(totalDeliveryCost)}</div>
+              </div>
+            )}
+            <div className="divider" />
+            <div className="row" style={{justifyContent:'space-between'}}>
+              <div>Total</div>
               <div style={{fontWeight:800}}>{formatPrice(subtotal)}</div>
             </div>
-            <p className="muted">Shipping and taxes calculated at checkout.</p>
-            <Link className="btn block" to="/checkout">Checkout</Link>
+            <p className="muted">
+              {items.some(item => item.artist) 
+                ? 'Custom artwork items may take 4-6 weeks. Standard items ship within 2-4 weeks.'
+                : 'Handcrafted items typically ship within 2-4 weeks.'
+              }
+            </p>
+            <div style={{display: 'flex', gap: '0.5rem', marginBottom: '1rem'}}>
+              <Link className="btn ghost" to="/shop" style={{flex: 1}}>Continue Shopping</Link>
+              <Link className="btn block" to="/checkout" style={{flex: 2}}>Checkout</Link>
+            </div>
           </div>
         </div>
       </div>

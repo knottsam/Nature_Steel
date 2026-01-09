@@ -232,6 +232,11 @@ firebase functions:secrets:set SQUARE_ENVIRONMENT`}
               >
                 <div>
                   {nameLabel} {item.artist ? `(with ${item.artist.name})` : '(No Custom Art)'} x{item.qty}
+                  {item.deliveryCost > 0 && (
+                    <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+                      + {formatPrice(item.deliveryCost * item.qty)} delivery
+                    </div>
+                  )}
                 </div>
                 <div style={{ fontWeight: 800 }}>{formatPrice(item.lineTotal)}</div>
               </div>
@@ -243,8 +248,8 @@ firebase functions:secrets:set SQUARE_ENVIRONMENT`}
             <div style={{ fontWeight: 900 }}>{formatPrice(subtotal)}</div>
           </div>
           <div style={{ marginTop: '1rem' }}>
-            <Link to='/cart' className='muted'>
-              Back to cart
+            <Link to='/cart' className='btn ghost'>
+              ← Back to Cart
             </Link>
           </div>
         </div>

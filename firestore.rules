@@ -12,13 +12,14 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly([
         'name', 'description', 'price', 'images', 'materials', 'material', 'itemType', 'coverImage',
         'customizable', 'published', 'galleryFeatured', 'stock', 'created', 'updated', 'slug', 'imageUrl',
-        'availableMaterials'
+        'availableMaterials', 'deliveryCost'
       ])
       && request.resource.data.name is string
       && request.resource.data.description is string
       && request.resource.data.materials is string
       && request.resource.data.price is int
       && request.resource.data.price >= 0
+      && (!('deliveryCost' in request.resource.data) || (request.resource.data.deliveryCost is int && request.resource.data.deliveryCost >= 0))
       && (!('material' in request.resource.data) || request.resource.data.material is string)
       && (!('itemType' in request.resource.data) || request.resource.data.itemType is string)
       && (!('coverImage' in request.resource.data) || request.resource.data.coverImage is string)

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { products } from '../data/products.js'
 import { artists } from '../data/artists.js'
 import { priceForProduct } from '../utils/pricing.js'
@@ -132,6 +132,7 @@ function ImageCarousel({ images }) {
 
 export default function Product() {
   const { slug } = useParams()
+  const navigate = useNavigate()
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
   const [artistId, setArtistId] = useState('none')
@@ -323,25 +324,33 @@ export default function Product() {
           </div>
         )}
 
-        <button
-          className="btn"
-          disabled={soldOut}
-          onClick={() => {
-            const res = addToCart(product.id, selectedArtist?.id, 1, selectedMaterial)
-            if (res && res.ok) {
-              setToast('Added to cart')
-              setShowAdded(true)
-              setTimeout(() => { setShowAdded(false); setToast('') }, 1800)
-            } else {
-              const msg = res?.reason === 'soldout' ? 'Sold out' : res?.reason === 'limit' ? `Only ${available} available` : 'Unavailable'
-              setToast(msg)
-              setShowAdded(true)
-              setTimeout(() => { setShowAdded(false); setToast('') }, 1800)
-            }
-          }}
-        >
-          {soldOut ? 'Sold out' : 'Add to cart'}
-        </button>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button
+            className="btn"
+            disabled={soldOut}
+            onClick={() => {
+              const res = addToCart(product.id, selectedArtist?.id, 1, selectedMaterial)
+              if (res && res.ok) {
+                setToast('Added to cart')
+                setShowAdded(true)
+                setTimeout(() => { setShowAdded(false); setToast('') }, 1800)
+              } else {
+                const msg = res?.reason === 'soldout' ? 'Sold out' : res?.reason === 'limit' ? `Only ${available} available` : 'Unavailable'
+                setToast(msg)
+                setShowAdded(true)
+                setTimeout(() => { setShowAdded(false); setToast('') }, 1800)
+              }
+            }}
+          >
+            {soldOut ? 'Sold out' : 'Add to cart'}
+          </button>
+          <button 
+            onClick={() => navigate('/shop')} 
+            className="btn ghost" 
+          >
+            ← Back to Shop
+          </button>
+        </div>
 
         {showAdded && (
           <div style={{

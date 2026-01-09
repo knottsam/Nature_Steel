@@ -20,6 +20,7 @@ export default function Admin() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
+  const [deliveryCost, setDeliveryCost] = useState('');
   const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -196,6 +197,7 @@ export default function Admin() {
     setName(item.name || '');
     setDescription(item.description || '');
     setPrice(item.price ? (item.price / 100).toString() : '');
+    setDeliveryCost(item.deliveryCost ? (item.deliveryCost / 100).toString() : '');
     const gallery = Array.isArray(item.images) && item.images.length
       ? item.images
       : (typeof item.imageUrl === 'string' && item.imageUrl ? [item.imageUrl] : []);
@@ -273,6 +275,11 @@ export default function Admin() {
         throw new Error('Please enter a valid price.');
       }
       const pricePence = Math.round(priceNumber * 100);
+      const deliveryCostNumber = parseFloat(deliveryCost || '0');
+      if (!Number.isFinite(deliveryCostNumber) || deliveryCostNumber < 0) {
+        throw new Error('Please enter a valid delivery cost (0 or more).');
+      }
+      const deliveryCostPence = Math.round(deliveryCostNumber * 100);
       const normalizedMaterial = typeof material === 'string' ? material.trim() : '';
       const normalizedItemType = typeof itemType === 'string' ? itemType.trim() : '';
       const normalizedMaterials = typeof materials === 'string' ? materials.trim() : '';
@@ -305,6 +312,7 @@ export default function Admin() {
         name: name.trim(),
         description: description.trim(),
         price: pricePence,
+        deliveryCost: deliveryCostPence,
         images: orderedImages,
         materials: normalizedMaterials,
         material: normalizedMaterial,
@@ -355,6 +363,7 @@ export default function Admin() {
       setName('');
       setDescription('');
       setPrice('');
+      setDeliveryCost('');
       setImages([]);
       setExistingImages([]);
       setImagesToDelete([]);
@@ -696,6 +705,12 @@ export default function Admin() {
                 required
               />
               <input
+                type="number"
+                placeholder="Delivery cost (£)"
+                value={deliveryCost}
+                onChange={e => setDeliveryCost(e.target.value)}
+              />
+              <input
                 type="text"
                 placeholder="Item type (e.g. Bowl, Pen, Clock)"
                 value={itemType}
@@ -828,6 +843,7 @@ export default function Admin() {
                 setName('');
                 setDescription('');
                 setPrice('');
+                setDeliveryCost('');
                 setImages([]);
                 setExistingImages([]);
                 setMaterials('');

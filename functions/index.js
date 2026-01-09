@@ -307,6 +307,7 @@ async function fetchCartDetails(cartItems) {
       }
       const data = snap.data() || {};
       let unitPrice = (typeof data.price === "number" && Number.isFinite(data.price)) ? Number(data.price) : null;
+      const deliveryCost = (typeof data.deliveryCost === "number" && Number.isFinite(data.deliveryCost)) ? Number(data.deliveryCost) : 0;
       
       // Add artist fee and markup if artist is selected
       if (artistId && unitPrice != null) {
@@ -316,6 +317,11 @@ async function fetchCartDetails(cartItems) {
           const markup = Math.round(artistFee * SITE_SETTINGS.markupPercent);
           unitPrice = unitPrice + artistFee + markup;
         }
+      }
+      
+      // Add delivery cost
+      if (unitPrice != null) {
+        unitPrice = unitPrice + deliveryCost;
       }
       
       const name = typeof data.name === "string" && data.name ? data.name : productId;

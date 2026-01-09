@@ -54,6 +54,7 @@ export function CartProvider({ children }) {
             slug: d.slug || (d.name ? d.name.toLowerCase().replace(/\s+/g, '-') : doc.id),
             images: orderedGallery,
             basePricePence: d.price || 0,
+            deliveryCostPence: d.deliveryCost || 0,
             materials: d.materials || '',
             material: d.material ?? d.materials ?? '',
             itemType: d.itemType || '',
@@ -163,7 +164,8 @@ export function CartProvider({ children }) {
       const product = products.find(p => p.id === i.productId)
       const artist = i.artistId ? artists.find(a => a.id === i.artistId) : null
       const unitPrice = product ? priceForProduct(product, artist) : 0
-      return { ...i, product, artist, unitPrice, lineTotal: unitPrice * i.qty }
+      const deliveryCost = product ? product.deliveryCostPence || 0 : 0
+      return { ...i, product, artist, unitPrice, deliveryCost, lineTotal: (unitPrice + deliveryCost) * i.qty }
     })
   }, [items, products])
 
