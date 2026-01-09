@@ -46,22 +46,45 @@ try {
   // Validate required config before initializing
   const missingRequired = requiredKeys.filter(k => !import.meta.env[k] || import.meta.env[k].trim() === '');
   if (missingRequired.length > 0) {
+    console.error('[firebase] Missing required Firebase config:', missingRequired);
     throw new Error(`Missing required Firebase config: ${missingRequired.join(', ')}`);
   }
   
-  console.log('[firebase] Initializing Firebase app with config:', {
-    projectId: firebaseConfig.projectId,
-    authDomain: firebaseConfig.authDomain,
-    hasApiKey: !!firebaseConfig.apiKey,
-    hasAppId: !!firebaseConfig.appId,
-  });
+  // Validate config values are reasonable
+  const configValues = {
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY?.trim(),
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN?.trim(),
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID?.trim(),
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET?.trim(),
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID?.trim(),
+    appId: import.meta.env.VITE_FIREBASE_APP_ID?.trim(),
+  };
   
-  app = initializeApp(firebaseConfig);
+  // Check for obviously invalid values
+  if (configValues.apiKey && !configValues.apiKey.startsWith('AIza')) {
+    throw new Error('Invalid Firebase API key format');
+  }
+  if (configValues.appId && !configValues.appId.includes(':')) {
+    throw new Error('Invalid Firebase App ID format');
+  }
+  
+  console.log('[firebase] Initializing Firebase app with project:', configValues.projectId);
+  
+  app = initializeApp(configValues);
   console.log('[firebase] Firebase app initialized successfully');
 } catch (error) {
   console.error('[firebase] Failed to initialize Firebase app:', error);
-  // Don't throw here - let the app continue without Firebase
-  app = null;
+  console.error('[firebase] Config validation details:', {
+    hasApiKey: !!import.meta.env.VITE_FIREBASE_API_KEY,
+    apiKeyStartsWithAIza: import.meta.env.VITE_FIREBASE_API_KEY?.startsWith('AIza'),
+    hasAuthDomain: !!import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    hasProjectId: !!import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    hasStorageBucket: !!import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    hasMessagingSenderId: !!import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    hasAppId: !!import.meta.env.VITE_FIREBASE_APP_ID,
+    appIdHasColon: import.meta.env.VITE_FIREBASE_APP_ID?.includes(':'),
+  });
+  throw error;
 }
 export { app };
 // Optional App Check: requires VITE_FIREBASE_APPCHECK_KEY (reCAPTCHA v3 site key)
@@ -98,12 +121,22 @@ if (app && import.meta.env.PROD && import.meta.env.VITE_FIREBASE_MEASUREMENT_ID)
 // Prefer a custom Functions domain if provided (great when Firebase web config isn't set locally)
 const customDomain = import.meta.env.VITE_FIREBASE_FUNCTIONS_CUSTOM_DOMAIN || undefined;
 const region = import.meta.env.VITE_FIREBASE_FUNCTIONS_CUSTOM_DOMAIN ? undefined : (import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || undefined);
-export const functions = app ? getFunctions(app, region) : null;
+
+let functionsInstance;
+try {
+  functionsInstance = app ? getFunctions(app) : null;
+  console.log('[firebase] getFunctions() called', { hasApp: !!app, hasFunctions: !!functionsInstance });
+} catch (error) {
+  console.error('[firebase] getFunctions() failed:', error);
+  functionsInstance = null;
+}
+
+export const functions = functionsInstance;
 
 if (functions) {
-  console.log('[firebase] Functions initialized', { region, customDomain });
+  console.log('[firebase] Functions initialized successfully', { region, customDomain });
 } else {
-  console.warn('[firebase] Functions not initialized - app is null');
+  console.warn('[firebase] Functions not initialized - app may be null or getFunctions failed');
 }
 
 // Optional: connect to Functions emulator if enabled via env flag

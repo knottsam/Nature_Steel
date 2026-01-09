@@ -193,7 +193,14 @@ function isAllowedSquareRedirect(url) {
   if (typeof url !== "string") return false;
   const trimmed = url.trim();
   if (!trimmed) return false;
-  return trimmed.startsWith("https://");
+
+  // Allow HTTPS URLs in production
+  if (trimmed.startsWith("https://")) return true;
+
+  // Allow localhost HTTP URLs for development (updated)
+  if (trimmed.startsWith("http://localhost")) return true;
+
+  return false;
 }
 
 function appendParamsToUrl(base, params = {}) {
@@ -306,23 +313,21 @@ async function fetchCartDetails(cartItems) {
         return;
       }
       const data = snap.data() || {};
-      let unitPrice = (typeof data.price === "number" && Number.isFinite(data.price)) ? Number(data.price) : null;
+      let itemPrice = (typeof data.price === "number" && Number.isFinite(data.price)) ? Number(data.price) : null;
       const deliveryCost = (typeof data.deliveryCost === "number" && Number.isFinite(data.deliveryCost)) ? Number(data.deliveryCost) : 0;
       
       // Add artist fee and markup if artist is selected
-      if (artistId && unitPrice != null) {
+      if (artistId && itemPrice != null) {
         const artist = ARTISTS.find(a => a.id === artistId);
         if (artist) {
           const artistFee = artist.feePence;
           const markup = Math.round(artistFee * SITE_SETTINGS.markupPercent);
-          unitPrice = unitPrice + artistFee + markup;
+          itemPrice = itemPrice + artistFee + markup;
         }
       }
       
-      // Add delivery cost
-      if (unitPrice != null) {
-        unitPrice = unitPrice + deliveryCost;
-      }
+      // Keep delivery cost separate for itemized billing
+      const unitPrice = itemPrice != null ? itemPrice + deliveryCost : null;
       
       const name = typeof data.name === "string" && data.name ? data.name : productId;
       const normalizedImages = (() => {
@@ -377,7 +382,9 @@ async function fetchCartDetails(cartItems) {
         material,
         qty,
         name,
-        unitPrice,
+        unitPrice, // Total price including delivery
+        itemPrice, // Base item price without delivery
+        deliveryCost, // Delivery cost per item
         image: primaryImage,
         coverImage: mergedImages.length > 0 ? mergedImages[0] : null,
         images: mergedImages,
@@ -649,27 +656,114 @@ exports.createSquareCheckoutLink = onCall({
       state: "cancelled",
     }) : "";
 
+    console.log("Square checkout URLs:", {
+      origin,
+      originReturn,
+      envReturn,
+      returnBase,
+      redirectUrl,
+      cancelUrl: null, // Not using cancel_url
+      isEmulator: IS_EMULATOR
+    });
+
+    // For localhost development, use HTTPS URLs to satisfy Square's requirements
+    let finalRedirectUrl = redirectUrl;
+    
+    if (!redirectUrl && originReturn && originReturn.startsWith("http://localhost")) {
+      // Convert localhost HTTP to HTTPS for Square (won't actually redirect but enables proper checkout)
+      const httpsBase = originReturn.replace("http://", "https://");
+      finalRedirectUrl = appendParamsToUrl(httpsBase, {
+        token: idempotencyKey,
+        source: "square",
+      });
+      console.log("Using HTTPS localhost URL for Square:", { finalRedirectUrl });
+    } else if (!redirectUrl) {
+      // Use dummy HTTPS URL for other cases
+      const dummyBase = "https://example.com/checkout";
+      finalRedirectUrl = appendParamsToUrl(dummyBase, {
+        token: idempotencyKey,
+        source: "square",
+      });
+      console.log("Using dummy URL:", { finalRedirectUrl });
+    }
+
+    // For localhost development, use HTTPS URLs to satisfy Square's requirements
+    if (!redirectUrl && originReturn && originReturn.startsWith("http://localhost")) {
+      // Convert localhost HTTP to HTTPS for Square (won't actually redirect but enables proper checkout)
+      const httpsBase = originReturn.replace("http://", "https://");
+      finalRedirectUrl = appendParamsToUrl(httpsBase, {
+        token: idempotencyKey,
+        source: "square",
+      });
+      console.log("Using HTTPS localhost URL for Square:", { finalRedirectUrl });
+    } else if (!redirectUrl) {
+      // Use dummy HTTPS URLs for other cases
+      const dummyBase = "https://example.com/checkout";
+      finalRedirectUrl = appendParamsToUrl(dummyBase, {
+        token: idempotencyKey,
+        source: "square",
+      });
+      console.log("Using dummy URL:", { finalRedirectUrl });
+    }
+
     const canUseDetailedItems = cartDetails.items.every(
-        (item) => Number.isInteger(item.unitPrice) && item.unitPrice > 0,
+        (item) => Number.isInteger(item.itemPrice) && item.itemPrice > 0,
     );
-    const lineItems = canUseDetailedItems ?
-      cartDetails.items.map((item) => ({
-        name: item.name || item.productId,
-        quantity: String(item.qty),
-        base_price_money: {
-          amount: Number(item.unitPrice),
-          currency: currencyCode,
-        },
-        note: item.productId,
-      })) :
-      [{
+    
+    const lineItems = [];
+    
+    if (canUseDetailedItems) {
+      // Add product line items
+      cartDetails.items.forEach((item) => {
+        lineItems.push({
+          name: item.name || item.productId,
+          quantity: String(item.qty),
+          base_price_money: {
+            amount: Number(item.itemPrice),
+            currency: currencyCode,
+          },
+          note: item.productId,
+        });
+      });
+      
+      // Add delivery line items (grouped by delivery cost)
+      const deliveryGroups = {};
+      cartDetails.items.forEach((item) => {
+        if (item.deliveryCost > 0) {
+          const key = `delivery_${item.deliveryCost}`;
+          if (!deliveryGroups[key]) {
+            deliveryGroups[key] = {
+              cost: item.deliveryCost,
+              quantity: 0,
+              name: "Delivery"
+            };
+          }
+          deliveryGroups[key].quantity += item.qty;
+        }
+      });
+      
+      Object.values(deliveryGroups).forEach((delivery) => {
+        lineItems.push({
+          name: delivery.name,
+          quantity: String(delivery.quantity),
+          base_price_money: {
+            amount: Number(delivery.cost),
+            currency: currencyCode,
+          },
+          note: "shipping",
+        });
+      });
+    } else {
+      // Fallback to single total line item
+      lineItems.push({
         name: summary || "Nature & Steel Order",
         quantity: "1",
         base_price_money: {
           amount: totalAmount,
           currency: currencyCode,
         },
-      }];
+      });
+    }
 
     const orderPayload = {
       location_id: locationId,
@@ -684,8 +778,9 @@ exports.createSquareCheckoutLink = onCall({
       allow_tipping: false,
       ask_for_shipping_address: true, // Ensure Square collects a shipping address for fulfilment
     };
-  if (redirectUrl) checkoutOptions.redirect_url = redirectUrl;
-  if (cancelUrl) checkoutOptions.cancel_url = cancelUrl;
+  if (finalRedirectUrl) checkoutOptions.redirect_url = finalRedirectUrl;
+  // Remove cancel_url to test if Square shows default cancel button
+  // if (finalCancelUrl) checkoutOptions.cancel_url = finalCancelUrl;
 
     const normalizedCountry = typeof countryCode === "string" && countryCode.trim() ? countryCode.trim().toUpperCase() : undefined;
     const prePopulated = {};
@@ -710,6 +805,8 @@ exports.createSquareCheckoutLink = onCall({
       requestBody.pre_populated_data = prePopulated;
     }
 
+    console.log("Square API request body:", JSON.stringify(requestBody, null, 2));
+
     const response = await fetch(`${base}/v2/online-checkout/payment-links`, {
       method: "POST",
       headers: {
@@ -729,6 +826,8 @@ exports.createSquareCheckoutLink = onCall({
     }
 
     const payload = await response.json();
+    console.log("Square API response:", JSON.stringify(payload, null, 2));
+    
     const link = payload && payload.payment_link;
     if (!link || !link.url) {
       throw new Error("Square payment link response missing url");
@@ -776,8 +875,8 @@ exports.createSquareCheckoutLink = onCall({
       environment,
       idempotencyKey,
       quickPay: !canUseDetailedItems,
-      returnUrl: redirectUrl || null,
-      cancelUrl: cancelUrl || null,
+      returnUrl: finalRedirectUrl || null,
+      cancelUrl: null, // Not using cancel_url parameter
       source: "square-payment-link",
     };
 
@@ -788,7 +887,7 @@ exports.createSquareCheckoutLink = onCall({
       paymentLinkId,
       orderId,
       expiresAt: link.expires_at || null,
-      redirectConfigured: Boolean(redirectUrl),
+      redirectConfigured: Boolean(finalRedirectUrl),
       returnToken: idempotencyKey,
     };
   } catch (err) {
@@ -818,15 +917,26 @@ exports.createSquareCheckoutLink = onCall({
 function initAdmin() {
   if (adminInitialized) return;
   try {
+    console.log("[functions] Checking Firebase Admin apps:", getApps().length);
     if (!getApps().length) {
-      initializeApp();
+      console.log("[functions] Initializing Firebase Admin app...");
+      initializeApp({
+        projectId: process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG).projectId : undefined,
+      });
+      console.log("[functions] Firebase Admin app initialized manually");
+    } else {
+      console.log("[functions] Firebase Admin app already initialized");
     }
     adminInitialized = true;
-    // eslint-disable-next-line no-console
-    console.log("[functions] Firebase Admin initialized");
+    console.log("[functions] Firebase Admin initialization complete");
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.error("[functions] Failed to initialize Firebase Admin:", e);
+    console.error("[functions] Environment check:", {
+      hasFirebaseConfig: !!process.env.FIREBASE_CONFIG,
+      firebaseConfigProjectId: process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG).projectId : 'parse-error',
+      functionsEmulator: IS_EMULATOR,
+    });
+    throw e;
   }
 }
 

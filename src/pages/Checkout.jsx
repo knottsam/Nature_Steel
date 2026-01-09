@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { httpsCallable } from 'firebase/functions'
 import { useCart } from '../context/CartContext.jsx'
 import { formatPrice } from '../utils/currency.js'
-import { functions, app } from '../firebase'
+import { functions, app, configHealth } from '../firebase'
 import SEO from '../components/SEO.jsx'
 import { trackBeginCheckout } from '../utils/analytics.js'
 
@@ -35,6 +35,47 @@ export default function Checkout() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [email, setEmail] = useState('')
+
+  // Check Firebase configuration
+  if (!configHealth.ok) {
+    return (
+      <div className='card'>
+        <h2>Firebase Configuration Error</h2>
+        <p>Missing Firebase environment variables:</p>
+        <ul>
+          {configHealth.missing.map(key => (
+            <li key={key}>{key}</li>
+          ))}
+        </ul>
+        <p>Please check your <code>.env.local</code> file and ensure all Firebase configuration is present.</p>
+      </div>
+    )
+  }
+
+  if (!app) {
+    return (
+      <div className='card'>
+        <h2>Firebase Initialization Error</h2>
+        <p>Firebase app failed to initialize. Check the browser console for details.</p>
+        <p>Common issues:</p>
+        <ul>
+          <li>Invalid Firebase configuration values</li>
+          <li>Missing or incorrect environment variables</li>
+          <li>Network connectivity issues</li>
+        </ul>
+      </div>
+    )
+  }
+
+  if (!functions) {
+    return (
+      <div className='card'>
+        <h2>Firebase Functions Error</h2>
+        <p>Firebase functions failed to initialize. Check the browser console for details.</p>
+        <p>This usually means the Firebase app was initialized but functions could not be configured.</p>
+      </div>
+    )
+  }
 
   const fetchSquareConfig = useCallback(async () => {
     setConfigError('')
@@ -92,12 +133,6 @@ export default function Checkout() {
 
       setLoading(true)
       try {
-        if (!app) {
-          throw new Error('Firebase app not initialized. Please check your configuration and refresh the page.')
-        }
-        if (!functions) {
-          throw new Error('Firebase functions not initialized. Please check your configuration and refresh the page.')
-        }
         const createLink = httpsCallable(functions, 'createSquareCheckoutLink')
         const itemsSummary = items
           .map((item) => `${item.product?.name || 'Item'} x${item.qty}`)
@@ -209,7 +244,7 @@ firebase functions:secrets:set SQUARE_ENVIRONMENT`}
             <h2 className='h2'>Payment</h2>
             <p className='muted' style={{ marginBottom: '1rem' }}>
               You will be redirected to a secure Square checkout where you can pay by card, Apple Pay, or Google Pay.
-              Square will collect your name and delivery address after the redirect, and a “Return to Nature &amp; Steel” link on that page lets you cancel at any time.
+              Square will collect your name and delivery address after the redirect.
             </p>
             {error && (
               <div style={{ color: 'crimson', marginBottom: 12 }}>
