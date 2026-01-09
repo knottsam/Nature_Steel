@@ -298,6 +298,11 @@ input[type="number"] {
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 
+/* Force scroll to top on page changes */
+html {
+  scroll-behavior: auto !important;
+}
+
 /* --- BACKGROUND: layered natural/metallic feel (no images) --- */
 body {
   margin: 0;
@@ -322,6 +327,16 @@ body::before {
   position: fixed; inset: 0; pointer-events: none; z-index: -1;
   background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope="0.02"/></feComponentTransfer></filter><rect width="120" height="120" filter="url(%23n)"/></svg>');
   opacity: .6;
+}
+
+/* Fix background-attachment on iOS Safari */
+@supports (-webkit-touch-callout: none) {
+  body {
+    background-attachment: scroll;
+  }
+  body::before {
+    background-attachment: scroll;
+  }
 }
 
 .app { display: flex; min-height: 100dvh; flex-direction: column; }

@@ -8,6 +8,7 @@ import { SITE_SETTINGS } from '../data/siteSettings.js'
 import { useCart } from '../context/CartContext.jsx'
 import { useSiteConfig } from '../context/SiteConfigContext.jsx'
 import SEO from '../components/SEO.jsx'
+import LoadingSkeleton from '../components/LoadingSkeleton.jsx'
 import { trackProductView } from '../utils/analytics.js'
 
 const BRAND = 'Nature & Steel Bespoke'
@@ -183,7 +184,7 @@ export default function Product() {
     setLoading((prev) => prev && true)
   }, [slug, liveProducts])
 
-  if (loading) return <p>Loading...</p>
+  if (loading) return <LoadingSkeleton type="product-detail" />
   if (!product) return <p>Not found</p>
 
   // Fallbacks for Firestore products

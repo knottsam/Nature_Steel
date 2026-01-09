@@ -1,5 +1,5 @@
-import React, { Suspense } from 'react'
-import { Outlet } from 'react-router-dom'
+import React, { Suspense, useEffect } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
 import NavBar from './components/NavBar.jsx'
 import Footer from './components/Footer.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
@@ -13,13 +13,58 @@ export default function App() {
   // Set to true to show under construction overlay
   const UNDER_CONSTRUCTION = false;
 
+  const location = useLocation();
+
+  // Global scroll to top handler
+  useEffect(() => {
+    const handleRouteChange = () => {
+      // Force scroll to top with multiple methods
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+
+    // Listen for navigation events
+    window.addEventListener('beforeunload', handleRouteChange);
+    window.addEventListener('popstate', handleRouteChange);
+
+    // Also handle programmatic navigation
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function(state, title, url) {
+      originalPushState.apply(this, arguments);
+      setTimeout(handleRouteChange, 0);
+    };
+
+    history.replaceState = function(state, title, url) {
+      originalReplaceState.apply(this, arguments);
+      setTimeout(handleRouteChange, 0);
+    };
+
+    return () => {
+      window.removeEventListener('beforeunload', handleRouteChange);
+      window.removeEventListener('popstate', handleRouteChange);
+      history.pushState = originalPushState;
+      history.replaceState = originalReplaceState;
+    };
+  }, []);
+
+  // Also handle location changes
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [location.pathname]);
+
   return (
-    <CartProvider>
-      <PageTracker />
-      <WebVitalsTracker />
+    <>
+      <CartProvider>
+        <PageTracker />
+        <WebVitalsTracker />
       {/* Skip links for accessibility */}
-      <a href="#main-content" className="skip-link">Skip to main content</a>
-      <a href="#navigation" className="skip-link">Skip to navigation</a>
+        <a href="#main-content" className="skip-link">Skip to main content</a>
+        <a href="#navigation" className="skip-link">Skip to navigation</a>
 
       {UNDER_CONSTRUCTION && (
         <div style={{
@@ -52,9 +97,7 @@ export default function App() {
         <main className="container" id="main-content">
           <ErrorBoundary>
             <Suspense fallback={
-              <div style={{ padding: '2rem', textAlign: 'center' }}>
-                <LoadingSkeleton type="grid" count={6} />
-              </div>
+              <LoadingSkeleton type="page" />
             }>
               <Outlet />
             </Suspense>
@@ -63,5 +106,6 @@ export default function App() {
         <Footer />
       </div>
     </CartProvider>
+    </>
   )
 }
