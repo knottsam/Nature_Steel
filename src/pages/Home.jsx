@@ -170,8 +170,7 @@ export default function Home() {
           <h1 className="h1">Nature & Steel Bespoke: Handcrafted, bespoke pieces. </h1>
           <div className="hero-subline-row">
             <p className="muted hero-subline-text">
-              Choose a piece, and we build you something one-of-a-kind. Transparent pricing.
-              <span className="hero-inline-note">Made-to-order.</span>
+              Choose a piece, and we build you something one-of-a-kind. Transparent pricing. Made-to-order.
             </p>
             <Link className="btn hero-subline-btn" to="/shop">Shop Now</Link>
           </div>
