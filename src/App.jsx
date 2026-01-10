@@ -8,6 +8,7 @@ import PageTracker from './components/PageTracker.jsx'
 import WebVitalsTracker from './components/WebVitalsTracker.jsx'
 import ToastContainer from './components/ToastContainer.jsx'
 import { CartProvider } from './context/CartContext.jsx'
+import { ThemeProvider } from './context/ThemeContext.jsx'
 import './index.css'
 
 export default function App() {
@@ -45,7 +46,8 @@ export default function App() {
 
   return (
     <>
-      <CartProvider>
+      <ThemeProvider>
+        <CartProvider>
         <PageTracker />
         <WebVitalsTracker />
         {/* Skip links for accessibility */}
@@ -93,6 +95,7 @@ export default function App() {
           </div>
           <ToastContainer />
         </CartProvider>
+      </ThemeProvider>
 
     </>
   )

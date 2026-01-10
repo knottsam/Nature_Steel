@@ -253,7 +253,7 @@ export default function Home() {
           <h2 className="h2">Why choose Nature & Steel Bespoke?</h2>
           <div className="grid" style={{ gap: '1.5rem' }}>
             {FEATURE_HIGHLIGHTS.map((feature, index) => (
-              <article key={feature.title} className="card" style={{ padding: '1.5rem' }}>
+              <article key={feature.title} className="card feature-card" style={{ padding: '1.5rem' }}>
                 <h3 className="h3" style={{ marginBottom: '0.5rem' }}>{`${index + 1}. ${feature.title}`}</h3>
                 <p className="muted" style={{ margin: 0 }}>{feature.copy}</p>
               </article>
@@ -262,10 +262,10 @@ export default function Home() {
         </section>
 
         <section className="card">
-          <h2 className="h2">Stories from collectors</h2>
+          <h2 className="h2">What do our customers say about us?</h2>
           <div className="grid" style={{ gap: '1.25rem' }}>
             {TESTIMONIALS.map(({ quote, author }) => (
-              <blockquote key={quote} className="card" style={{ padding: '1.25rem', backgroundColor: 'var(--card-bg, #fff)' }}>
+              <blockquote key={quote} className="card testimonial-card" style={{ padding: '1.25rem', backgroundColor: 'var(--card-bg, #fff)' }}>
                 <p className="muted" style={{ fontStyle: 'italic', marginBottom: '0.75rem' }}>&ldquo;{quote}&rdquo;</p>
                 <cite className="muted" style={{ display: 'block', fontSize: '0.9rem' }}>— {author}</cite>
               </blockquote>

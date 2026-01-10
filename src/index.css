@@ -1786,3 +1786,12 @@ footer { border-top: 1px solid var(--border); padding: 2rem 0; color: var(--mute
   --moss: #6f8c64;
   --sage: #8eac92;
 }
+
+/* Light mode only: darker backgrounds for inner cards */
+[data-theme="light"] .card.testimonial-card {
+  background: color-mix(in srgb, rgba(44, 134, 44, 0.616), #ffffff) !important;
+}
+
+[data-theme="light"] .card.feature-card {
+  background: color-mix(in srgb, rgba(44, 134, 44, 0.616), #ffffff) !important;
+}
