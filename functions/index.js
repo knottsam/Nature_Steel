@@ -13,15 +13,7 @@ let adminInitialized = false;
 
 const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
 // Prefer env var; fall back to functions config for backward compatibility
-const REQUIRE_APP_CHECK = process.env.REQUIRE_APP_CHECK === "1" ||
-  (process.env.FIREBASE_CONFIG && (() => {
-    try {
-      const cfg = JSON.parse(process.env.FIREBASE_CONFIG);
-      return cfg?.security?.require_app_check === "1";
-    } catch (e) {
-      return false;
-    }
-  })());
+const REQUIRE_APP_CHECK = process.env.REQUIRE_APP_CHECK === "1";
 
 // Load local env for emulator: prefer .env.local then .env
 try {
@@ -1471,8 +1463,6 @@ exports.checkAdminStatus = onCall({secrets: [adminEmails]}, async (request) => {
   }
 
   const isAdmin = await isUserAdmin(userEmail);
-  
-  return { isAdmin };
   
   return { isAdmin };
 });

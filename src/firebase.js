@@ -88,6 +88,8 @@ try {
 }
 export { app };
 // Optional App Check: requires VITE_FIREBASE_APPCHECK_KEY (reCAPTCHA v3 site key)
+// Temporarily disabled for debugging admin authentication issues
+/*
 const appCheckKey = import.meta.env.VITE_FIREBASE_APPCHECK_KEY;
 if (app && appCheckKey && appCheckKey.trim()) {
   // Allow a debug token in local dev for easier testing
@@ -100,6 +102,7 @@ if (app && appCheckKey && appCheckKey.trim()) {
     isTokenAutoRefreshEnabled: true,
   });
 }
+*/
 
 export const db = app ? getFirestore(app) : null;
 export const storage = app ? getStorage(app) : null;
