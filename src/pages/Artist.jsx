@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { artists } from '../data/artists.js'
 import { useSiteConfig } from '../context/SiteConfigContext.jsx'
 import SEO from '../components/SEO.jsx'
 
 export default function Artist() {
   const { slug } = useParams()
+  const navigate = useNavigate()
   const { config, loading } = useSiteConfig()
   if (!loading && !config?.artistPagesEnabled) {
     return (

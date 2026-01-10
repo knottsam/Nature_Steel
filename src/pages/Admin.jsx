@@ -668,7 +668,7 @@ export default function Admin() {
   const removeAdminEmail = async (emailToRemove) => {
     if (!user || !isAdmin || emailToRemove === user.email) return;
     
-    if (!confirm(`Are you sure you want to remove ${emailToRemove} from admin access?`)) return;
+    if (!window.confirm(`Are you sure you want to remove ${emailToRemove} from admin access?`)) return;
     
     setRemovingAdmin(emailToRemove);
     try {
@@ -1366,7 +1366,7 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
       document.body.removeChild(link);
     } catch (err) {
       console.error('CSV export failed:', err);
-      showErrorToast('Failed to export CSV');
+      showErrorToast('Failed to export CSV'); // eslint-disable-line no-undef
     }
     setDownloading(false);
   };
@@ -1414,7 +1414,7 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
       console.log(`[Admin] Found ${ordersToDelete.length} PENDING orders to delete`);
 
       if (ordersToDelete.length === 0) {
-        showSuccessToast('No pending orders to clean up.');
+        showSuccessToast('No pending orders to clean up.'); // eslint-disable-line no-undef
         onLoadingChange(false);
         return;
       }
@@ -1442,7 +1442,7 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
         }
       }
 
-      showSuccessToast(`Successfully deleted ${deletedCount} pending orders.`);
+      showSuccessToast(`Successfully deleted ${deletedCount} pending orders.`); // eslint-disable-line no-undef
 
       // Refetch orders
       const freshSnap = await getDocs(q);

@@ -5,6 +5,7 @@ import App from './App.jsx'
 import './index.css'
 import { SiteConfigProvider } from './context/SiteConfigContext.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
+import { ToastProvider } from './context/ToastContext.jsx'
 
 const Home = lazy(() => import('./pages/Home.jsx'))
 const Shop = lazy(() => import('./pages/Shop.jsx'))
@@ -48,7 +49,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
       <ThemeProvider>
         <SiteConfigProvider>
-          <RouterProvider router={router} />
+          <ToastProvider>
+            <RouterProvider router={router} />
+          </ToastProvider>
         </SiteConfigProvider>
       </ThemeProvider>
     </React.StrictMode>,

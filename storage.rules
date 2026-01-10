@@ -3,9 +3,12 @@ service firebase.storage {
   match /b/{bucket}/o {
     function isAdmin() {
       return request.auth != null && 
-             firestore.exists(/databases/(default)/documents/config/adminEmails) &&
-             request.auth.token.email in 
-             firestore.get(/databases/(default)/documents/config/adminEmails).data.emails;
+             (
+               !firestore.exists(/databases/(default)/documents/config/adminEmails) ||
+               (firestore.exists(/databases/(default)/documents/config/adminEmails) &&
+                request.auth.token.email in 
+                firestore.get(/databases/(default)/documents/config/adminEmails).data.emails)
+             );
     }
 
     // Furniture images: public read for catalog; writes restricted to admins

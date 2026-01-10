@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import NavBar from './components/NavBar.jsx'
 import Footer from './components/Footer.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
@@ -8,7 +8,6 @@ import PageTracker from './components/PageTracker.jsx'
 import WebVitalsTracker from './components/WebVitalsTracker.jsx'
 import ToastContainer from './components/ToastContainer.jsx'
 import { CartProvider } from './context/CartContext.jsx'
-import { ToastProvider } from './context/ToastContext.jsx'
 import './index.css'
 
 export default function App() {
@@ -16,6 +15,7 @@ export default function App() {
   const UNDER_CONSTRUCTION = false;
 
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Global scroll to top handler
   useEffect(() => {
@@ -30,25 +30,9 @@ export default function App() {
     window.addEventListener('beforeunload', handleRouteChange);
     window.addEventListener('popstate', handleRouteChange);
 
-    // Also handle programmatic navigation
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
-
-    history.pushState = function(state, title, url) {
-      originalPushState.apply(this, arguments);
-      setTimeout(handleRouteChange, 0);
-    };
-
-    history.replaceState = function(state, title, url) {
-      originalReplaceState.apply(this, arguments);
-      setTimeout(handleRouteChange, 0);
-    };
-
     return () => {
       window.removeEventListener('beforeunload', handleRouteChange);
       window.removeEventListener('popstate', handleRouteChange);
-      history.pushState = originalPushState;
-      history.replaceState = originalReplaceState;
     };
   }, []);
 
@@ -61,13 +45,12 @@ export default function App() {
 
   return (
     <>
-      <ToastProvider>
-        <CartProvider>
-          <PageTracker />
-          <WebVitalsTracker />
-          {/* Skip links for accessibility */}
-          <a href="#main-content" className="skip-link">Skip to main content</a>
-          <a href="#navigation" className="skip-link">Skip to navigation</a>
+      <CartProvider>
+        <PageTracker />
+        <WebVitalsTracker />
+        {/* Skip links for accessibility */}
+        <a href="#main-content" className="skip-link">Skip to main content</a>
+        <a href="#navigation" className="skip-link">Skip to navigation</a>
 
           {UNDER_CONSTRUCTION && (
             <div style={{
@@ -110,7 +93,7 @@ export default function App() {
           </div>
           <ToastContainer />
         </CartProvider>
-      </ToastProvider>
+
     </>
   )
 }
