@@ -3,19 +3,15 @@ import { db, storage } from '../firebase';
 import { collection, addDoc, Timestamp, getDocs, deleteDoc, doc, updateDoc, setDoc, query, orderBy, deleteField, runTransaction } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useSiteConfig } from '../context/SiteConfigContext.jsx';
 import { DEFAULT_SITE_VISIBILITY, SITE_VISIBILITY_DOC } from '../config/siteVisibility.js';
 import { GALLERY_LIMIT } from '../utils/gallery.js';
 
-const ALLOWED_ADMINS = [
-  'knott.mail8@gmail.com',
-  'natureandsteelbespoke@gmail.com',
-  // 'anotheradmin@email.com',
-];
-
 
 export default function Admin() {
   const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [authError, setAuthError] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -62,11 +58,27 @@ export default function Admin() {
     artistsEnabled: false,
     artistPagesEnabled: false,
   });
+  const [initializingConfig, setInitializingConfig] = useState(false);
 
   React.useEffect(() => {
     const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
+      
+      if (user) {
+        // Check admin status
+        try {
+          const functions = getFunctions();
+          const checkAdminStatus = httpsCallable(functions, 'checkAdminStatus');
+          const result = await checkAdminStatus();
+          setIsAdmin(result.data.isAdmin);
+        } catch (error) {
+          console.error('Failed to check admin status:', error);
+          setIsAdmin(false);
+        }
+      } else {
+        setIsAdmin(false);
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -584,6 +596,23 @@ export default function Admin() {
     }
   }
 
+  const initializeAdminConfig = async () => {
+    if (!user || !isAdmin) return;
+    
+    setInitializingConfig(true);
+    try {
+      const functions = getFunctions();
+      const initializeAdminConfigFn = httpsCallable(functions, 'initializeAdminConfig');
+      const result = await initializeAdminConfigFn();
+      alert('Admin configuration initialized successfully!');
+      console.log('Admin config result:', result.data);
+    } catch (error) {
+      console.error('Failed to initialize admin config:', error);
+      alert('Failed to initialize admin config: ' + (error.message || 'Unknown error'));
+    }
+    setInitializingConfig(false);
+  };
+
   const handleVisibilityToggle = async (field) => {
     setToggleError('')
     setToggleMessage('')
@@ -602,12 +631,22 @@ export default function Admin() {
   }
 
   // Restrict access to allowed admins only
-  if (user && !ALLOWED_ADMINS.includes(user.email)) {
+  if (user && !isAdmin) {
     return (
       <div style={{ maxWidth: 400, margin: '2rem auto', color: 'red' }}>
         <h2>Access Denied</h2>
         <p>This Google account is not authorized for admin access.</p>
         <button type="button" onClick={handleLogout} className="btn ghost btn-compact">Sign Out</button>
+      </div>
+    );
+  }
+
+  // Show loading while checking admin status
+  if (user && isAdmin === false) {
+    return (
+      <div style={{ maxWidth: 400, margin: '2rem auto' }}>
+        <h2>Checking Permissions...</h2>
+        <p>Please wait while we verify your admin access.</p>
       </div>
     );
   }
@@ -640,7 +679,17 @@ export default function Admin() {
       <div style={{ maxWidth: 800, margin: '2rem auto' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>Admin</h2>
-          <button type="button" onClick={handleLogout} className="btn ghost btn-compact">Sign Out</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button 
+              type="button" 
+              onClick={initializeAdminConfig}
+              className="btn ghost btn-compact"
+              disabled={initializingConfig}
+            >
+              {initializingConfig ? 'Initializing...' : 'Init Admin Config'}
+            </button>
+            <button type="button" onClick={handleLogout} className="btn ghost btn-compact">Sign Out</button>
+          </div>
         </div>
         <div className="admin-mode-buttons">
           {[

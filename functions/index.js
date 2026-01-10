@@ -40,6 +40,9 @@ const squareLocationId = defineSecret("SQUARE_LOCATION_ID");
 const squareEnvironment = defineSecret("SQUARE_ENVIRONMENT");
 const squareWebhookSecret = defineSecret("SQUARE_WEBHOOK_SECRET");
 
+// Admin configuration
+const adminEmails = defineSecret("ADMIN_EMAILS");
+
 // Static artists data (mirrored from client-side)
 const ARTISTS = [
   {
@@ -1409,6 +1412,81 @@ exports.getOrderStatus = onCall({}, async (request) => {
     console.error("getOrderStatus error:", err);
     if (err instanceof HttpsError) throw err;
     throw new HttpsError("internal", "Failed to load order status", {message: err && err.message});
+  }
+});
+
+exports.checkAdminStatus = onCall({secrets: [adminEmails]}, async (request) => {
+  if (IS_EMULATOR || !REQUIRE_APP_CHECK) {
+    // Skip App Check in emulator or when disabled
+  } else {
+    // Verify App Check token
+    try {
+      await getAppCheck().verifyToken(request.appCheckToken);
+    } catch (err) {
+      console.warn("App Check verification failed:", err);
+      throw new HttpsError("unauthenticated", "Invalid app check token");
+    }
+  }
+
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const userEmail = request.auth.token.email;
+  if (!userEmail) {
+    throw new HttpsError("unauthenticated", "User email not available");
+  }
+
+  // Get admin emails from secret
+  const adminEmailsList = adminEmails.value().split(',').map(email => email.trim().toLowerCase());
+  
+  const isAdmin = adminEmailsList.includes(userEmail.toLowerCase());
+  
+  return { isAdmin };
+});
+
+exports.initializeAdminConfig = onCall({secrets: [adminEmails]}, async (request) => {
+  if (IS_EMULATOR || !REQUIRE_APP_CHECK) {
+    // Skip App Check in emulator or when disabled
+  } else {
+    // Verify App Check token
+    try {
+      await getAppCheck().verifyToken(request.appCheckToken);
+    } catch (err) {
+      console.warn("App Check verification failed:", err);
+      throw new HttpsError("unauthenticated", "Invalid app check token");
+    }
+  }
+
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  // Only allow this function to be called by existing admins
+  const userEmail = request.auth.token.email;
+  const adminEmailsList = adminEmails.value().split(',').map(email => email.trim().toLowerCase());
+  const isAdmin = adminEmailsList.includes(userEmail.toLowerCase());
+  
+  if (!isAdmin) {
+    throw new HttpsError("permission-denied", "Only admins can initialize admin config");
+  }
+
+  try {
+    initAdmin();
+    const db = getFirestore();
+    
+    // Create the admin emails document
+    await db.collection('config').doc('adminEmails').set({
+      emails: adminEmailsList,
+      initialized: true,
+      initializedAt: Timestamp.now(),
+      initializedBy: userEmail
+    });
+    
+    return { success: true, message: 'Admin configuration initialized' };
+  } catch (err) {
+    console.error("initializeAdminConfig error:", err);
+    throw new HttpsError("internal", "Failed to initialize admin config");
   }
 });
 

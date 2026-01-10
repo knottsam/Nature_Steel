@@ -2,10 +2,10 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     function isAdmin() {
-      return request.auth != null && request.auth.token.email in [
-        'knott.mail8@gmail.com',
-        'natureandsteelbespoke@gmail.com'
-      ];
+      return request.auth != null && 
+             firestore.exists(/databases/(default)/documents/config/adminEmails) &&
+             request.auth.token.email in 
+             firestore.get(/databases/(default)/documents/config/adminEmails).data.emails;
     }
 
     // Furniture images: public read for catalog; writes restricted to admins
