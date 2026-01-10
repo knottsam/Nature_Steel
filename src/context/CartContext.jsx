@@ -14,6 +14,7 @@ export function CartProvider({ children }) {
   const demoEnabled = import.meta.env.VITE_ENABLE_DEMO_PRODUCTS === '1'
   // Pre-seed products with demo data to avoid a blank period while Firestore loads
   const [products, setProducts] = useState(demoEnabled ? [...demoProducts] : [])
+  const [productsLoading, setProductsLoading] = useState(!demoEnabled)
   const [cleanupTick, setCleanupTick] = useState(0)
 
   useEffect(() => {
@@ -30,12 +31,21 @@ export function CartProvider({ children }) {
   useEffect(() => {
     if (!configHealth.ok) {
       console.warn('[CartContext] Skipping product subscription; missing Firebase config:', configHealth.missing)
+      setProductsLoading(false)
       // In this case, keep demo or empty based on flag
       return
     }
+
+    // Set a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.warn('[CartContext] Product loading timeout - falling back to available data')
+      setProductsLoading(false)
+    }, 10000) // 10 second timeout
+
     // Match security rules: only read published items
     const q = query(collection(db, 'furniture'), where('published', '==', true))
     const unsub = onSnapshot(q, (querySnapshot) => {
+      clearTimeout(timeoutId) // Clear timeout on success
       try {
         const fromDb = querySnapshot.docs.map(doc => {
           const d = doc.data()
@@ -67,13 +77,21 @@ export function CartProvider({ children }) {
         } else if (!demoEnabled) {
           setProducts([])
         }
+        setProductsLoading(false)
       } catch {
         if (!demoEnabled) setProducts([])
+        setProductsLoading(false)
       }
-    }, () => {
-      if (!demoEnabled) setProducts([])
+    }, (error) => {
+      clearTimeout(timeoutId)
+      console.error('[CartContext] Firestore subscription error:', error)
+      setProductsLoading(false)
     })
-    return () => { try { unsub() } catch {} }
+
+    return () => { 
+      clearTimeout(timeoutId)
+      try { unsub() } catch {} 
+    }
   }, [])
 
   // Auto-clean cart entries that no longer have a matching product or have zero stock
@@ -173,7 +191,7 @@ export function CartProvider({ children }) {
   const totalQuantity = enriched.reduce((sum, i) => sum + i.qty, 0)
 
   return (
-    <CartContext.Provider value={{ items: enriched, products, addToCart, removeFromCart, updateQty, clearCart, subtotal, totalQuantity, cleanupTick }}>
+    <CartContext.Provider value={{ items: enriched, products, productsLoading, addToCart, removeFromCart, updateQty, clearCart, subtotal, totalQuantity, cleanupTick }}>
       {children}
     </CartContext.Provider>
   )

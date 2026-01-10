@@ -395,7 +395,7 @@ export default function Shop() {
         <section className="shop-results">
           {/* Screen reader announcements for dynamic content */}
           <div aria-live="polite" aria-atomic="true" className="sr-only">
-            {loading ? 'Loading products...' : 
+            {loading ? 'Loading products from database...' : 
              error ? `Error: ${error}` :
              `Showing ${filteredProducts.length} of ${allProducts.length} products`}
           </div>
@@ -404,6 +404,9 @@ export default function Shop() {
             <div className="card" style={{ textAlign: 'center', padding: '2rem' }}>
               <h3 className="h3" style={{ color: 'var(--error, #d32f2f)' }}>Unable to Load Products</h3>
               <p className="muted">{error}</p>
+              <p className="muted" style={{ fontSize: '0.9rem', marginTop: '1rem' }}>
+                If this persists, please check your internet connection or contact us.
+              </p>
               <button
                 className="btn"
                 onClick={() => {
@@ -411,12 +414,18 @@ export default function Shop() {
                   setLoading(true)
                   window.location.reload()
                 }}
+                style={{ marginTop: '1rem' }}
               >
                 Try Again
               </button>
             </div>
           ) : loading ? (
-            <LoadingSkeleton type="grid" count={9} />
+            <>
+              <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                <p className="muted">Loading products...</p>
+              </div>
+              <LoadingSkeleton type="grid" count={9} />
+            </>
           ) : (
             <>
               {filteredProducts.length > 0 ? (

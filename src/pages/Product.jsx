@@ -137,7 +137,7 @@ export default function Product() {
   const [loading, setLoading] = useState(true)
   const [artistId, setArtistId] = useState('none')
   const [selectedMaterial, setSelectedMaterial] = useState('default')
-  const { addToCart, products: liveProducts } = useCart()
+  const { addToCart, products: liveProducts, productsLoading } = useCart()
   const { config: siteConfig, loading: configLoading } = useSiteConfig()
   const [showAdded, setShowAdded] = useState(false)
   const [toast, setToast] = useState('')
@@ -181,11 +181,27 @@ export default function Product() {
       trackProductView(foundStatic)
       return
     }
-    // If neither found yet, stay loading until liveProducts updates
-    setLoading((prev) => prev && true)
-  }, [slug, liveProducts])
+    // If neither found and products are still loading, stay in loading state
+    // Otherwise, we've exhausted all options and should show not found
+    if (!productsLoading) {
+      setLoading(false)
+    }
+  }, [slug, liveProducts, productsLoading])
 
-  if (loading) return <LoadingSkeleton type="product-detail" />
+  if (loading) {
+    return (
+      <>
+        <SEO
+          title="Loading Product | Nature & Steel Bespoke"
+          description="Loading product details..."
+        />
+        <div style={{ textAlign: 'center', margin: '2rem 0' }}>
+          <p className="muted">Loading product details...</p>
+        </div>
+        <LoadingSkeleton type="product-detail" />
+      </>
+    )
+  }
   if (!product) {
     return (
       <>
