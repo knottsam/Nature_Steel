@@ -17,8 +17,40 @@ export default function Artist() {
   }
   const artist = artists.find(skeg => skeg.slug === slug)
   const [currentSlide, setCurrentSlide] = useState(0)
-  
-  if (!artist) return <p>Not found</p>
+
+  if (!artist) {
+    return (
+      <>
+        <SEO
+          title="Artist Not Found | Nature & Steel Bespoke"
+          description="The artist profile you're looking for could not be found. Explore our featured artists and their handcrafted work."
+          noIndex={true}
+        />
+        <section className="card" style={{ maxWidth: 650, margin: '2rem auto', textAlign: 'center' }}>
+          <h1 className="h1">Artist Not Found</h1>
+          <p className="muted" style={{ marginBottom: '2rem' }}>
+            The artist profile you're looking for doesn't exist or may have been removed.
+          </p>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => navigate('/artists')}
+              className="button"
+              style={{ padding: '0.75rem 1.5rem' }}
+            >
+              View All Artists
+            </button>
+            <button
+              onClick={() => navigate('/')}
+              className="button secondary"
+              style={{ padding: '0.75rem 1.5rem' }}
+            >
+              Back to Home
+            </button>
+          </div>
+        </section>
+      </>
+    )
+  }
 
   const nextSlide = () => {
     setCurrentSlide((prev) => (prev + 1) % artist.gallery.length)

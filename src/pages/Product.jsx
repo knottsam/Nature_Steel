@@ -186,7 +186,39 @@ export default function Product() {
   }, [slug, liveProducts])
 
   if (loading) return <LoadingSkeleton type="product-detail" />
-  if (!product) return <p>Not found</p>
+  if (!product) {
+    return (
+      <>
+        <SEO
+          title="Product Not Found | Nature & Steel Bespoke"
+          description="The product you're looking for could not be found. Browse our collection of handcrafted furniture and bespoke art pieces."
+          noIndex={true}
+        />
+        <section className="card" style={{ maxWidth: 650, margin: '2rem auto', textAlign: 'center' }}>
+          <h1 className="h1">Product Not Found</h1>
+          <p className="muted" style={{ marginBottom: '2rem' }}>
+            The product you're looking for doesn't exist or may have been removed.
+          </p>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => navigate('/shop')}
+              className="button"
+              style={{ padding: '0.75rem 1.5rem' }}
+            >
+              Browse Our Collection
+            </button>
+            <button
+              onClick={() => navigate('/')}
+              className="button secondary"
+              style={{ padding: '0.75rem 1.5rem' }}
+            >
+              Back to Home
+            </button>
+          </div>
+        </section>
+      </>
+    )
+  }
 
   // Fallbacks for Firestore products
   const images = (() => {
