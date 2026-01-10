@@ -87,14 +87,12 @@ function buildStructuredData(canonicalHref, title, description, imageUrl) {
             {
               '@type': 'Offer',
               itemOffered: {
-                '@type': 'Product',
                 name: 'Handcrafted Furniture'
               }
             },
             {
               '@type': 'Offer',
               itemOffered: {
-                '@type': 'Product',
                 name: 'Bespoke Art Pieces'
               }
             }
@@ -102,8 +100,8 @@ function buildStructuredData(canonicalHref, title, description, imageUrl) {
         },
         sameAs: [
           // Add social media URLs here when available
-          // 'https://www.instagram.com/natureandsteel',
-          // 'https://www.facebook.com/natureandsteel'
+          'https://www.instagram.com/natureandsteelbespoke',
+          'https://www.facebook.com/share/187w6k1C75/?mibextid=wwXIfr'
         ]
       },
       {

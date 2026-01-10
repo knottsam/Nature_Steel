@@ -240,9 +240,9 @@ export default function Product() {
           },
           "offers": {
             "@type": "Offer",
-            "price": price / 100,
+            "price": Math.max(0, price / 100), // Ensure price is never negative
             "priceCurrency": "GBP",
-            "availability": product.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+            "availability": soldOut ? "https://schema.org/OutOfStock" : "https://schema.org/InStock",
             "seller": {
               "@type": "Organization",
               "name": "Nature & Steel Bespoke"
