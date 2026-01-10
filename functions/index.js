@@ -1426,6 +1426,37 @@ exports.cleanupPendingOrders = onSchedule("every 24 hours", async () => {
       console.log("[cleanupPendingOrders] nothing to remove");
       return;
     }
+
+    // Restore inventory for each order before deleting
+    for (const doc of snapshot.docs) {
+      const orderData = doc.data();
+      if (orderData.items && Array.isArray(orderData.items)) {
+        for (const item of orderData.items) {
+          try {
+            const productId = String(item?.productId);
+            const qty = Number(item?.qty);
+            if (!productId || !Number.isInteger(qty) || qty <= 0) continue;
+            
+            await db.runTransaction(async (tx) => {
+              const productRef = db.collection("furniture").doc(productId);
+              const productSnap = await tx.get(productRef);
+              if (!productSnap.exists) return;
+              
+              const productData = productSnap.data() || {};
+              if (typeof productData.stock === 'number') {
+                const newStock = productData.stock + qty;
+                tx.update(productRef, { stock: newStock });
+              }
+            });
+            
+            console.log(`[cleanupPendingOrders] Restored stock for ${productId}: +${qty}`);
+          } catch (err) {
+            console.error(`[cleanupPendingOrders] Failed to restore stock for ${item?.productId}:`, err);
+          }
+        }
+      }
+    }
+
     const batch = db.batch();
     snapshot.docs.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();

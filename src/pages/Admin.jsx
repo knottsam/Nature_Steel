@@ -1213,35 +1213,28 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
       const snap = await getDocs(q);
       const allOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-      const now = new Date();
-      const fortyEightHoursAgo = new Date(now.getTime() - (48 * 60 * 60 * 1000));
-
-      const ordersToDelete = allOrders.filter(order => {
-        if (order.status !== 'PENDING') return false;
-        const createdDate = order.created?.toDate ? order.created.toDate() : new Date(order.created);
-        return createdDate < fortyEightHoursAgo;
-      });
+      const ordersToDelete = allOrders.filter(order => order.status === 'PENDING');
 
       console.log(`[Admin] Found ${allOrders.length} total orders`);
       console.log(`[Admin] Orders by status:`, allOrders.reduce((acc, order) => {
         acc[order.status] = (acc[order.status] || 0) + 1;
         return acc;
       }, {}));
-      console.log(`[Admin] Found ${ordersToDelete.length} PENDING orders older than 48 hours`);
+      console.log(`[Admin] Found ${ordersToDelete.length} PENDING orders to delete`);
 
       if (ordersToDelete.length === 0) {
-        alert('No old pending orders to clean up.');
+        alert('No pending orders to clean up.');
         onLoadingChange(false);
         return;
       }
 
-      const confirmDelete = window.confirm(`Delete ${ordersToDelete.length} pending orders older than 48 hours?`);
+      const confirmDelete = window.confirm(`Delete ${ordersToDelete.length} pending orders?`);
       if (!confirmDelete) {
         onLoadingChange(false);
         return;
       }
 
-      console.log(`[Admin] Deleting ${ordersToDelete.length} old pending orders...`);
+      console.log(`[Admin] Deleting ${ordersToDelete.length} pending orders...`);
       let deletedCount = 0;
 
       for (const order of ordersToDelete) {
@@ -1251,14 +1244,14 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
             await restoreInventoryForOrder(order.items);
           }
           await deleteDoc(doc(db, 'orders', order.id));
-          console.log(`[Admin] Deleted old pending order: ${order.id}`);
+          console.log(`[Admin] Deleted pending order: ${order.id}`);
           deletedCount++;
         } catch (deleteErr) {
           console.error(`[Admin] Failed to delete order ${order.id}:`, deleteErr);
         }
       }
 
-      alert(`Successfully deleted ${deletedCount} old pending orders.`);
+      alert(`Successfully deleted ${deletedCount} pending orders.`);
 
       // Refetch orders
       const freshSnap = await getDocs(q);
@@ -1299,7 +1292,15 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
           </button>
         </div>
       </div>
-      <div style={{ overflowX:'auto' }}>
+      <div style={{ 
+        overflowX:'auto', 
+        overflowY: 'auto', 
+        maxHeight: '50vh', 
+        border: '1px solid var(--border)', 
+        borderRadius: '8px', 
+        padding: '16px',
+        backgroundColor: 'var(--surface-2)'
+      }}>
         <table style={{ width:'100%', borderCollapse:'collapse' }}>
           <thead>
             <tr style={{ textAlign:'left', borderBottom:'1px solid var(--border)' }}>
