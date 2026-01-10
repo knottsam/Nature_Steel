@@ -5,6 +5,7 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { getAuth, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useSiteConfig } from '../context/SiteConfigContext.jsx';
+import { useToast } from '../context/ToastContext.jsx';
 import { DEFAULT_SITE_VISIBILITY, SITE_VISIBILITY_DOC } from '../config/siteVisibility.js';
 import { GALLERY_LIMIT } from '../utils/gallery.js';
 
@@ -59,6 +60,15 @@ export default function Admin() {
     artistPagesEnabled: false,
   });
   const [initializingConfig, setInitializingConfig] = useState(false);
+  // Admin management state
+  const [adminEmails, setAdminEmails] = useState([]);
+  const [adminEmailsLoading, setAdminEmailsLoading] = useState(false);
+  const [adminEmailsError, setAdminEmailsError] = useState('');
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [addingAdmin, setAddingAdmin] = useState(false);
+  const [removingAdmin, setRemovingAdmin] = useState(null);
+
+  const { success: showSuccessToast, error: showErrorToast } = useToast();
 
   React.useEffect(() => {
     const auth = getAuth();
@@ -180,6 +190,13 @@ export default function Admin() {
     setGalleryFeatured(false);
     setEditingWasGalleryFeatured(false);
   }, [galleryCount, editId]);
+
+  // Fetch admin emails when in admin mode
+  React.useEffect(() => {
+    if (user && isAdmin && mode === 'admin') {
+      fetchAdminEmails();
+    }
+  }, [user, isAdmin, mode]);
 
   const handleGoogleLogin = async () => {
     setAuthError('');
@@ -604,13 +621,67 @@ export default function Admin() {
       const functions = getFunctions();
       const initializeAdminConfigFn = httpsCallable(functions, 'initializeAdminConfig');
       const result = await initializeAdminConfigFn();
-      alert('Admin configuration initialized successfully!');
+      showSuccessToast('Admin configuration initialized successfully!');
       console.log('Admin config result:', result.data);
     } catch (error) {
       console.error('Failed to initialize admin config:', error);
-      alert('Failed to initialize admin config: ' + (error.message || 'Unknown error'));
+      showErrorToast('Failed to initialize admin config: ' + (error.message || 'Unknown error'));
     }
     setInitializingConfig(false);
+  };
+
+  const fetchAdminEmails = async () => {
+    if (!user || !isAdmin) return;
+    
+    setAdminEmailsLoading(true);
+    setAdminEmailsError('');
+    try {
+      const functions = getFunctions();
+      const getAdminEmailsFn = httpsCallable(functions, 'getAdminEmails');
+      const result = await getAdminEmailsFn();
+      setAdminEmails(result.data.emails || []);
+    } catch (error) {
+      console.error('Failed to fetch admin emails:', error);
+      setAdminEmailsError('Failed to load admin emails: ' + (error.message || 'Unknown error'));
+    }
+    setAdminEmailsLoading(false);
+  };
+
+  const addAdminEmail = async () => {
+    if (!user || !isAdmin || !newAdminEmail.trim()) return;
+    
+    setAddingAdmin(true);
+    try {
+      const functions = getFunctions();
+      const addAdminEmailFn = httpsCallable(functions, 'addAdminEmail');
+      const result = await addAdminEmailFn({ email: newAdminEmail.trim() });
+      setAdminEmails(result.data.emails || []);
+      setNewAdminEmail('');
+      showSuccessToast('Admin email added successfully!');
+    } catch (error) {
+      console.error('Failed to add admin email:', error);
+      showErrorToast('Failed to add admin email: ' + (error.message || 'Unknown error'));
+    }
+    setAddingAdmin(false);
+  };
+
+  const removeAdminEmail = async (emailToRemove) => {
+    if (!user || !isAdmin || emailToRemove === user.email) return;
+    
+    if (!confirm(`Are you sure you want to remove ${emailToRemove} from admin access?`)) return;
+    
+    setRemovingAdmin(emailToRemove);
+    try {
+      const functions = getFunctions();
+      const removeAdminEmailFn = httpsCallable(functions, 'removeAdminEmail');
+      const result = await removeAdminEmailFn({ email: emailToRemove });
+      setAdminEmails(result.data.emails || []);
+      showSuccessToast('Admin email removed successfully!');
+    } catch (error) {
+      console.error('Failed to remove admin email:', error);
+      showErrorToast('Failed to remove admin email: ' + (error.message || 'Unknown error'));
+    }
+    setRemovingAdmin(null);
   };
 
   const handleVisibilityToggle = async (field) => {
@@ -680,14 +751,6 @@ export default function Admin() {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>Admin</h2>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button 
-              type="button" 
-              onClick={initializeAdminConfig}
-              className="btn ghost btn-compact"
-              disabled={initializingConfig}
-            >
-              {initializingConfig ? 'Initializing...' : 'Init Admin Config'}
-            </button>
             <button type="button" onClick={handleLogout} className="btn ghost btn-compact">Sign Out</button>
           </div>
         </div>
@@ -697,6 +760,7 @@ export default function Admin() {
             { key: 'inventory', label: 'Update stock' },
             { key: 'projects', label: 'Manage projects' },
             { key: 'site', label: 'Edit site' },
+            { key: 'admin', label: 'Manage admins' },
           ].map(option => (
             <button
               key={option.key}
@@ -952,7 +1016,7 @@ export default function Admin() {
                       try {
                         await updateDoc(doc(db, 'furniture', item.id), { stock: Number(item.stock ?? 0) });
                       } catch (err) {
-                        alert('Failed to save stock: ' + (err?.message || 'unknown'))
+                        showErrorToast('Failed to save stock: ' + (err?.message || 'unknown'))
                       }
                       }}
                     >
@@ -1169,6 +1233,84 @@ export default function Admin() {
           </section>
         </div>
       )}
+
+      {mode === 'admin' && (
+        <div style={{ width: '100%', maxWidth: 'min(1100px, 96vw)', margin: '2rem auto' }}>
+          <section className="card" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+              <div>
+                <h3 className="h3">Admin Email Management</h3>
+                <p className="muted" style={{ marginTop: 4 }}>Manage which email addresses have admin access to this site.</p>
+              </div>
+              <button 
+                type="button" 
+                onClick={initializeAdminConfig}
+                className="btn ghost btn-compact"
+                disabled={initializingConfig}
+              >
+                {initializingConfig ? 'Initializing...' : 'Init Admin Config'}
+              </button>
+            </div>
+            
+            {adminEmailsError && <p style={{ color: '#dc2626', marginBottom: 16 }}>{adminEmailsError}</p>}
+            
+            <div style={{ marginBottom: 20 }}>
+              <h4 style={{ marginBottom: 8 }}>Current Admin Emails</h4>
+              {adminEmailsLoading ? (
+                <p>Loading admin emails...</p>
+              ) : adminEmails.length === 0 ? (
+                <p className="muted">No admin emails configured yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {adminEmails.map(email => (
+                    <div key={email} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      border: '1px solid var(--border)',
+                      borderRadius: 4,
+                      background: email === user?.email ? 'var(--surface-hover)' : 'var(--surface)'
+                    }}>
+                      <span>{email} {email === user?.email && '(You)'}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeAdminEmail(email)}
+                        disabled={removingAdmin === email || email === user?.email}
+                        className="btn ghost btn-compact"
+                        style={{ color: '#dc2626' }}
+                      >
+                        {removingAdmin === email ? 'Removing...' : 'Remove'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div>
+              <h4 style={{ marginBottom: 8 }}>Add New Admin Email</h4>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="email"
+                  placeholder="Enter email address"
+                  value={newAdminEmail}
+                  onChange={e => setNewAdminEmail(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={addAdminEmail}
+                  disabled={addingAdmin || !newAdminEmail.trim()}
+                  className="btn btn-compact"
+                >
+                  {addingAdmin ? 'Adding...' : 'Add Admin'}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
     </>
   );
 }
@@ -1224,7 +1366,7 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
       document.body.removeChild(link);
     } catch (err) {
       console.error('CSV export failed:', err);
-      alert('Failed to export CSV');
+      showErrorToast('Failed to export CSV');
     }
     setDownloading(false);
   };
@@ -1272,7 +1414,7 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
       console.log(`[Admin] Found ${ordersToDelete.length} PENDING orders to delete`);
 
       if (ordersToDelete.length === 0) {
-        alert('No pending orders to clean up.');
+        showSuccessToast('No pending orders to clean up.');
         onLoadingChange(false);
         return;
       }
@@ -1300,7 +1442,7 @@ function OrdersTable({ orders, loading, error, onOrdersChange, onLoadingChange, 
         }
       }
 
-      alert(`Successfully deleted ${deletedCount} pending orders.`);
+      showSuccessToast(`Successfully deleted ${deletedCount} pending orders.`);
 
       // Refetch orders
       const freshSnap = await getDocs(q);

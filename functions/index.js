@@ -921,23 +921,31 @@ function initAdmin() {
   if (adminInitialized) return;
   try {
     console.log("[functions] Checking Firebase Admin apps:", getApps().length);
-    if (!getApps().length) {
-      console.log("[functions] Initializing Firebase Admin app...");
+    console.log("[functions] App names:", getApps().map(app => app.name));
+    
+    // Try to get the default app first
+    try {
+      getApp(); // This will throw if no default app exists
+      console.log("[functions] Default Firebase Admin app already exists");
+    } catch (e) {
+      console.log("[functions] Default app doesn't exist, initializing...");
+      // Initialize with credentials for functions environment
       initializeApp({
         projectId: process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG).projectId : undefined,
       });
-      console.log("[functions] Firebase Admin app initialized manually");
-    } else {
-      console.log("[functions] Firebase Admin app already initialized");
+      console.log("[functions] Firebase Admin app initialized");
     }
+    
     adminInitialized = true;
     console.log("[functions] Firebase Admin initialization complete");
   } catch (e) {
     console.error("[functions] Failed to initialize Firebase Admin:", e);
     console.error("[functions] Environment check:", {
       hasFirebaseConfig: !!process.env.FIREBASE_CONFIG,
-      firebaseConfigProjectId: process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG).projectId : 'parse-error',
+      firebaseConfig: process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG) : 'parse-error',
       functionsEmulator: IS_EMULATOR,
+      appsLength: getApps().length,
+      appNames: getApps().map(app => app.name)
     });
     throw e;
   }
@@ -1415,6 +1423,31 @@ exports.getOrderStatus = onCall({}, async (request) => {
   }
 });
 
+// Helper function to check if an email is an admin
+async function isUserAdmin(userEmail) {
+  // Get admin emails from secret
+  const adminEmailsList = adminEmails.value().split(',').map(email => email.trim().toLowerCase());
+  
+  // Check if user is in secret list
+  const isInSecret = adminEmailsList.includes(userEmail.toLowerCase());
+  
+  // Also check Firestore document if it exists
+  let isInDocument = false;
+  try {
+    initAdmin();
+    const db = getFirestore();
+    const configSnap = await db.collection('config').doc('adminEmails').get();
+    if (configSnap.exists) {
+      const docEmails = configSnap.data().emails || [];
+      isInDocument = docEmails.includes(userEmail.toLowerCase());
+    }
+  } catch (err) {
+    console.warn("Failed to check admin document:", err);
+  }
+  
+  return isInSecret || isInDocument;
+}
+
 exports.checkAdminStatus = onCall({secrets: [adminEmails]}, async (request) => {
   if (IS_EMULATOR || !REQUIRE_APP_CHECK) {
     // Skip App Check in emulator or when disabled
@@ -1437,12 +1470,49 @@ exports.checkAdminStatus = onCall({secrets: [adminEmails]}, async (request) => {
     throw new HttpsError("unauthenticated", "User email not available");
   }
 
+  const isAdmin = await isUserAdmin(userEmail);
+  
+  return { isAdmin };
+  
+  return { isAdmin };
+});
+
+exports.getAdminEmails = onCall({secrets: [adminEmails]}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const userEmail = request.auth.token.email;
+  if (!userEmail) {
+    throw new HttpsError("unauthenticated", "User email not available");
+  }
+
   // Get admin emails from secret
   const adminEmailsList = adminEmails.value().split(',').map(email => email.trim().toLowerCase());
   
-  const isAdmin = adminEmailsList.includes(userEmail.toLowerCase());
+  // Check if user is in secret list
+  if (!adminEmailsList.includes(userEmail.toLowerCase())) {
+    throw new HttpsError("permission-denied", "Only admins can view admin emails");
+  }
   
-  return { isAdmin };
+  // Try to get emails from Firestore, fall back to secret if it fails
+  let currentEmails = adminEmailsList;
+  try {
+    initAdmin();
+    const db = getFirestore();
+    const configSnap = await db.collection('config').doc('adminEmails').get();
+    if (configSnap.exists && configSnap.data().emails) {
+      currentEmails = configSnap.data().emails;
+    }
+  } catch (err) {
+    console.warn("Failed to get admin emails from Firestore, using secret:", err.message);
+    // Continue with secret emails
+  }
+  
+  return { 
+    success: true, 
+    emails: currentEmails
+  };
 });
 
 exports.initializeAdminConfig = onCall({secrets: [adminEmails]}, async (request) => {
@@ -1462,31 +1532,184 @@ exports.initializeAdminConfig = onCall({secrets: [adminEmails]}, async (request)
     throw new HttpsError("unauthenticated", "User must be authenticated");
   }
 
-  // Only allow this function to be called by existing admins
+  // Allow initialization if user is in secret list OR if config doesn't exist yet (first-time setup)
   const userEmail = request.auth.token.email;
   const adminEmailsList = adminEmails.value().split(',').map(email => email.trim().toLowerCase());
-  const isAdmin = adminEmailsList.includes(userEmail.toLowerCase());
+  const isInSecretList = adminEmailsList.includes(userEmail.toLowerCase());
   
-  if (!isAdmin) {
-    throw new HttpsError("permission-denied", "Only admins can initialize admin config");
+  try {
+    initAdmin();
+    
+    // Check if config already exists
+    const db = getFirestore();
+    const configRef = db.collection('config').doc('adminEmails');
+    const configSnap = await configRef.get();
+    const configExists = configSnap.exists;
+    
+    if (!isInSecretList && configExists) {
+      throw new HttpsError("permission-denied", "Only admins can initialize admin config");
+    }
+    
+    // Get current admin config or initialize with secret emails
+    let currentEmails = [];
+    if (configExists) {
+      currentEmails = configSnap.data().emails || [];
+    } else {
+      // Initialize with the secret emails
+      currentEmails = adminEmailsList;
+    }
+
+    // Add any additional emails from request
+    const hasAdditionalEmails = request.data && request.data.additionalEmails && Array.isArray(request.data.additionalEmails) && request.data.additionalEmails.length > 0;
+    let emailsChanged = false;
+    
+    if (hasAdditionalEmails) {
+      const newEmails = request.data.additionalEmails
+        .map(email => email.trim().toLowerCase())
+        .filter(email => email && email.includes('@') && !currentEmails.includes(email));
+      if (newEmails.length > 0) {
+        currentEmails = [...currentEmails, ...newEmails];
+        emailsChanged = true;
+      }
+    }
+
+    // Only update the document if there are changes or if we're initializing for the first time
+    if (!configExists || emailsChanged) {
+      await configRef.set({
+        emails: currentEmails,
+        lastModified: Timestamp.now(),
+        lastModifiedBy: userEmail
+      }, { merge: true });
+    }
+    
+    return { 
+      success: true, 
+      message: 'Admin configuration updated',
+      emails: currentEmails
+    };
+  } catch (err) {
+    console.error("initializeAdminConfig error:", err);
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", "Failed to update admin config");
+  }
+});
+
+exports.addAdminEmail = onCall({secrets: [adminEmails]}, async (request) => {
+  const userEmail = request.auth?.token?.email;
+  if (!userEmail) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
   }
 
   try {
     initAdmin();
     const db = getFirestore();
     
-    // Create the admin emails document
-    await db.collection('config').doc('adminEmails').set({
-      emails: adminEmailsList,
-      initialized: true,
-      initializedAt: Timestamp.now(),
-      initializedBy: userEmail
-    });
+    // Check if the requesting user is an admin
+    const isAdmin = await isUserAdmin(userEmail);
+    if (!isAdmin) {
+      throw new HttpsError("permission-denied", "Only admins can add new admin emails");
+    }
+
+    const newEmail = request.data?.email?.trim()?.toLowerCase();
+    if (!newEmail || !newEmail.includes('@')) {
+      throw new HttpsError("invalid-argument", "Valid email address required");
+    }
+
+    // Get current admin config
+    const configRef = db.collection('config').doc('adminEmails');
+    const configSnap = await configRef.get();
     
-    return { success: true, message: 'Admin configuration initialized' };
+    let currentEmails = [];
+    if (configSnap.exists) {
+      currentEmails = configSnap.data().emails || [];
+    }
+
+    // Check if email already exists
+    if (currentEmails.includes(newEmail)) {
+      throw new HttpsError("already-exists", "Email is already an admin");
+    }
+
+    // Add the new email
+    currentEmails.push(newEmail);
+
+    // Update the document
+    await configRef.set({
+      emails: currentEmails,
+      lastModified: Timestamp.now(),
+      lastModifiedBy: userEmail
+    }, { merge: true });
+    
+    return { 
+      success: true, 
+      message: `Added ${newEmail} as admin`,
+      emails: currentEmails
+    };
   } catch (err) {
-    console.error("initializeAdminConfig error:", err);
-    throw new HttpsError("internal", "Failed to initialize admin config");
+    console.error("addAdminEmail error:", err);
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", "Failed to add admin email");
+  }
+});
+
+exports.removeAdminEmail = onCall({secrets: [adminEmails]}, async (request) => {
+  const userEmail = request.auth?.token?.email;
+  if (!userEmail) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  try {
+    initAdmin();
+    const db = getFirestore();
+    
+    // Check if the requesting user is an admin
+    const isAdmin = await isUserAdmin(userEmail);
+    if (!isAdmin) {
+      throw new HttpsError("permission-denied", "Only admins can remove admin emails");
+    }
+
+    const emailToRemove = request.data?.email?.trim()?.toLowerCase();
+    if (!emailToRemove || !emailToRemove.includes('@')) {
+      throw new HttpsError("invalid-argument", "Valid email address required");
+    }
+
+    // Prevent removing your own email
+    if (emailToRemove === userEmail) {
+      throw new HttpsError("invalid-argument", "Cannot remove your own admin email");
+    }
+
+    // Get current admin config
+    const configRef = db.collection('config').doc('adminEmails');
+    const configSnap = await configRef.get();
+    
+    let currentEmails = [];
+    if (configSnap.exists) {
+      currentEmails = configSnap.data().emails || [];
+    }
+
+    // Check if email exists
+    if (!currentEmails.includes(emailToRemove)) {
+      throw new HttpsError("not-found", "Email is not an admin");
+    }
+
+    // Remove the email
+    currentEmails = currentEmails.filter(email => email !== emailToRemove);
+
+    // Update the document
+    await configRef.set({
+      emails: currentEmails,
+      lastModified: Timestamp.now(),
+      lastModifiedBy: userEmail
+    }, { merge: true });
+    
+    return { 
+      success: true, 
+      message: `Removed ${emailToRemove} from admins`,
+      emails: currentEmails
+    };
+  } catch (err) {
+    console.error("removeAdminEmail error:", err);
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", "Failed to remove admin email");
   }
 });
 

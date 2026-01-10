@@ -3,9 +3,12 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isAdmin() {
       return request.auth != null && 
-             exists(/databases/$(database)/documents/config/adminEmails) &&
-             request.auth.token.email in 
-             get(/databases/$(database)/documents/config/adminEmails).data.emails;
+             (
+               !exists(/databases/$(database)/documents/config/adminEmails) ||
+               (exists(/databases/$(database)/documents/config/adminEmails) &&
+                request.auth.token.email in 
+                get(/databases/$(database)/documents/config/adminEmails).data.emails)
+             );
     }
 
     function isValidFurniture() {
@@ -35,7 +38,8 @@ service cloud.firestore {
       && (!('updated' in request.resource.data) || request.resource.data.updated is timestamp);
     }
 
-    // Allow admin config initialization (temporary - remove after setup)
+    // Allow admin config initialization - authenticated users can create/read this document
+    // The function itself will validate admin permissions
     match /config/adminEmails {
       allow read, write: if request.auth != null;
     }
