@@ -6,16 +6,23 @@ const ThemeContext = createContext({
 })
 
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState('light')
+  const [theme, setTheme] = useState('dark')
 
   useEffect(() => {
-    // Check for saved theme preference or default to light
+    // One-time migration: force everyone onto dark mode (overriding any
+    // previously saved preference). After this runs once, the user's own
+    // toggle choices are respected as normal.
+    const FORCE_DARK_KEY = 'themeForcedDark-v1'
     const savedTheme = localStorage.getItem('theme')
-    if (savedTheme) {
+
+    if (!localStorage.getItem(FORCE_DARK_KEY)) {
+      setTheme('dark')
+      localStorage.setItem('theme', 'dark')
+      localStorage.setItem(FORCE_DARK_KEY, '1')
+    } else if (savedTheme) {
       setTheme(savedTheme)
     } else {
-      // Default to light mode
-      setTheme('light')
+      setTheme('dark')
     }
   }, [])
 

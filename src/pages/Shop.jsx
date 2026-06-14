@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import ProductCard from '../components/ProductCard.jsx'
 import LoadingSkeleton from '../components/LoadingSkeleton.jsx'
 import { db, configHealth } from '../firebase'
@@ -12,6 +13,11 @@ const PAGE_SIZE = 9 // Number of products per page
 
 export default function Shop() {
   const { config, loading: configLoading } = useSiteConfig()
+  const [searchParams] = useSearchParams()
+  // Seed the search from ?q= or ?type= (e.g. homepage category tiles). The
+  // search already matches name, description, piece type and material, so a
+  // category with no matches simply shows the friendly empty state.
+  const initialSearch = (searchParams.get('q') || searchParams.get('type') || '').trim()
   if (!configLoading && !config?.shopEnabled) {
     return (
       <section className="card" style={{ maxWidth: 650, margin: '0 auto' }}>
@@ -24,7 +30,7 @@ export default function Shop() {
   const [dbProducts, setDbProducts] = useState(demoEnabled ? [...demoProducts] : [])
   const [loading, setLoading] = useState(demoEnabled ? false : true)
   const [error, setError] = useState(null)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [searchTerm, setSearchTerm] = useState(initialSearch)
   const [selectedMaterials, setSelectedMaterials] = useState([])
   const [selectedItemTypes, setSelectedItemTypes] = useState([])
   const [minPrice, setMinPrice] = useState('')
