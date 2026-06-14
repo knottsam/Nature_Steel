@@ -380,8 +380,8 @@ body::before {
   }
 }
 
-.app { display: flex; min-height: 100dvh; flex-direction: column; }
-.container { width: min(1200px, 92%); margin: 0 auto; padding: 2.25rem 0; flex: 1; }
+.app { display: flex; min-height: 100dvh; flex-direction: column; overflow-x: clip; }
+.container { width: min(1200px, 92%); margin: 0 auto; padding: 2.25rem 0; flex: 1; max-width: 100%; }
 
 /* --- TYPOGRAPHY --- */
 .h1 { font-size: clamp(1.9rem, 3.2vw, 3rem); line-height: 1.12; margin: .35rem 0 1rem; letter-spacing: -0.01em; }
@@ -463,9 +463,12 @@ img { max-width: 100%; display: block; border-radius: var(--r-md); }
   padding: clamp(1.25rem, 2vw, 1.75rem);
 }
 .home-stacked-sections {
+  grid-template-columns: minmax(0, 1fr); /* lock the column to the container width — never size to content max-content (was overflowing 721–900px) */
+  max-width: 100%;
   row-gap: clamp(1rem, 2.2vw, 1.35rem);
   column-gap: clamp(1.5rem, 3vw, 2rem);
 }
+.home-stacked-sections > * { min-width: 0; }
 .home-feature-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -508,7 +511,7 @@ img { max-width: 100%; display: block; border-radius: var(--r-md); }
 
 @media (max-width: 720px) {
   .home-stacked-sections {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .cart-grid {
@@ -529,8 +532,12 @@ img { max-width: 100%; display: block; border-radius: var(--r-md); }
     grid-template-rows: none;
   }
 
-  /* Revert subgrid to simple stacking on mobile (single column) */
-  .home-feature-grid > .card {
+  /* Revert subgrid to simple stacking on mobile (single column).
+     Use :first/:last-child to override the desktop grid-column assignments
+     (which otherwise win on specificity and shove a panel off-screen). */
+  .home-feature-grid > .card,
+  .home-feature-grid > .card:first-child,
+  .home-feature-grid > .card:last-child {
     display: flex;
     flex-direction: column;
     grid-row: auto;
@@ -541,9 +548,10 @@ img { max-width: 100%; display: block; border-radius: var(--r-md); }
   .home-feature-grid > .card > .h2 { margin: .35rem 0 1rem; }
 
   /* Trim mobile scroll: hide the "Why choose" panel on narrow layouts
-     (the commission CTA + process steps already cover the same selling points). */
-  .home-why {
-    display: none;
+     (the commission CTA + process steps already cover the same selling points).
+     Needs high specificity + !important to beat the flex/grid resets above. */
+  .home-feature-grid > .card.home-why {
+    display: none !important;
   }
 }
 
